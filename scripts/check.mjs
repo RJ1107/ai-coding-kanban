@@ -7,7 +7,7 @@ import {spawn, execFile} from 'node:child_process';
 import {promisify} from 'node:util';
 import net from 'node:net';
 import http from 'node:http';
-import {root, apply} from '../assets/workboard/store.mjs';
+import {root, apply, summarize} from '../assets/workboard/store.mjs';
 
 const run = promisify(execFile);
 const blank = () => ({schema:1,revision:0,projects:[],tasks:[],events:[],updatedAt:null});
@@ -32,6 +32,33 @@ test('task lifecycle, project isolation, evidence, no-op and stale-edit protecti
   assert.throws(() => apply(state,{type:'task',project:'missing',title:'No project'}), /Create project/);
   assert.throws(() => apply(state,{type:'task',project:'a',title:' '}), /non-empty/);
   assert.equal(state.events.filter(e=>e.taskId==='same' && e.projectId==='a').length,5);
+});
+
+test('time in status survives edits, and the handoff summary carries blockers and evidence', () => {
+  const state = blank();
+  apply(state, {type:'project',project:'a',title:'Project A',goal:'Ship it'});
+  apply(state, {type:'task',project:'a',id:'one',title:'Build',status:'doing',actor:'Codex'});
+  const task = state.tasks[0];
+  task.statusAt = task.updatedAt = '2020-01-01T00:00:00.000Z';
+  apply(state, {type:'task',project:'a',id:'one',note:'Halfway'});
+  assert.equal(task.statusAt,'2020-01-01T00:00:00.000Z'); assert.notEqual(task.updatedAt,task.statusAt);
+  apply(state, {type:'task',project:'a',id:'one',status:'done',evidence:'Ran the\nsuite: 4 passed'});
+  assert.equal(task.statusAt,task.updatedAt);
+  delete task.statusAt; // boards written by 1.x have no statusAt
+  apply(state, {type:'task',project:'a',id:'one',note:'Still done'});
+  assert.ok(task.statusAt);
+  apply(state, {type:'task',project:'a',id:'two',title:'Deploy',status:'blocked',note:'Needs a token',actor:'Codex',owner:'Claude Code'});
+  apply(state, {type:'note',project:'a',note:'Scope reduced',actor:'You'});
+  const text = summarize(state,'a');
+  assert.match(text,/^# Handoff: Project A\n\nGoal: Ship it/);
+  assert.match(text,/Progress: 1\/2 done, 0 in progress, 1 blocked, 0 up next/);
+  assert.match(text,/## Blocked\n- `two` Deploy \(owner: Claude Code\)\n  - Blocker: Needs a token/);
+  assert.match(text,/  - Evidence: Ran the suite: 4 passed/);
+  assert.match(text,/## Project notes\n- .* You: Scope reduced/);
+  assert.ok(text.indexOf('## Blocked') < text.indexOf('## Done'));
+  assert.equal(summarize(state),text);
+  assert.throws(() => summarize(state,'missing'), /does not exist/);
+  assert.throws(() => summarize(blank()), /No project/);
 });
 
 test('CLI persists concurrent writers without losing updates', async () => {
@@ -74,6 +101,10 @@ test('live events, safe local mutations, restart persistence, and unavailable ro
     assert.equal(mutation.status,200);
     const next=await reader.read(); assert.match(new TextDecoder().decode(next.value),/Live test/);
     streamControl.abort();
+    const summary=await fetch(base+'/api/summary?project=live');
+    assert.match(summary.headers.get('content-type'),/markdown/); assert.match(await summary.text(),/# Handoff: Live test/);
+    assert.equal((await fetch(base+'/api/summary?project=missing')).status,400);
+    for (const asset of ['/','/app.js','/field.js','/style.css']) assert.equal((await fetch(base+asset)).status,200);
     assert.equal((await fetch(base+'/data/board.json')).status,404);
     assert.equal((await fetch(base+'/../server.mjs')).status,404);
     await stopServer(child); child=null;
@@ -116,6 +147,11 @@ test('setup avoids occupied ports, resumes owned server, and stops only that ser
     assert.notEqual(info.port,port);
     const again=JSON.parse((await run(process.execPath,args)).stdout);
     assert.equal(again.pid,info.pid);assert.equal(again.reused,true);
+    // An upgraded runtime must replace its own older viewer instead of reusing stale server code.
+    const store=path.join(temp,'.agent-workboard/store.mjs');
+    fs.writeFileSync(store,fs.readFileSync(store,'utf8').replace(/version = '[^']+'/,"version = '99.0.0'"));
+    const upgraded=JSON.parse((await run(process.execPath,[path.join(temp,'.agent-workboard/manage.mjs'),'start'])).stdout);
+    assert.equal(upgraded.version,'99.0.0');assert.equal(upgraded.reused,false);assert.notEqual(upgraded.pid,info.pid);info=upgraded;
     const stopped=JSON.parse((await run(process.execPath,[path.join(temp,'.agent-workboard/manage.mjs'),'stop'])).stdout);
     assert.equal(stopped.stopped,true);info=null;
     assert.ok(occupied.listening);

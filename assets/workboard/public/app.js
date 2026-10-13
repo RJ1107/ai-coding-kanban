@@ -1,142 +1,330 @@
+import {createField} from './field.js';
+
 const $ = id => document.getElementById(id);
-const labels = {en: {projects:'PROJECTS',newProject:'+ New project',localOnly:'Stored on this computer',workspace:'Workspace',compact:'Side panel',expanded:'Full board',eyebrow:'YOUR ASSISTANT. YOUR PROGRESS.',newTask:'+ Add task',focus:'WORKING ON NOW',boardHelp:'Open a card for context and evidence · Drag to change status',activity:'Recent activity',recorded:'A record of what changed',footer:'Progress reported by your coding assistant. Connection status refers to the board service.',taskDetail:'TASK DETAILS',status:'Status',note:'Latest progress / next step',evidence:'Results and verification',cancel:'Cancel',save:'Save changes',name:'Title',create:'Create',goal:'Project goal',live:'Live updates',connecting:'Connecting',offline:'Reconnecting',todo:'Up next',doing:'In progress',done:'Done',blocked:'Blocked',empty:'No tasks here yet',verified:'Evidence',unverified:'No evidence attached yet',noFocus:'No task is in progress',noFocusNote:'The assistant updates this when work starts.',allDone:'The current plan is complete',allDoneNote:'Open the cards to review results and verification.',noProject:'Create a project to track the work',noProjectGoal:'Your assistant creates tasks after understanding the goal, then keeps them up to date.',taskCount:n=>`${n} tasks`,updated:'Updated',history:'Card history',saved:'Changes saved',created:'Created',emptyActivity:'Task changes will appear here.',added:'created',moved:'moved',edited:'updated',projectUpdated:'updated project',projectNote:'added an update',newProjectTitle:'New project',newTaskTitle:'Add task',selectProject:'Create a project first',stale:'Showing the last known state while disconnected.'}
-};
-let lang = "en";
-let state = {projects:[], tasks:[], events:[]};
-let token;
-let selectedProject = new URLSearchParams(location.search).get('project') || localStorage.getItem('workboard-project');
-let selectedTask;
-let selectedUpdatedAt;
-let createType;
-let createStatus = 'todo';
-let connected = false;
-let compact = localStorage.getItem('workboard-compact') === 'true';
-let source;
-const t = key => labels[lang][key] || key;
-const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
-const clock = value => value ? new Date(value).toLocaleTimeString(lang === 'zh' ? 'zh-CN' : 'en-US', {hour:'2-digit', minute:'2-digit'}) : '—';
-const fullTime = value => new Date(value).toLocaleString(lang === 'zh' ? 'zh-CN' : 'en-US');
 const statuses = ['todo', 'doing', 'done', 'blocked'];
-function connection() { $('connection').textContent = t(connected ? 'live' : 'offline'); $('connection').classList.toggle('offline', !connected); $('connection').title = connected ? '' : t('stale'); }
-function eventText(e) {
-  if (e.kind === 'create') return `${t('added')} · ${e.title}`;
-  if (e.kind === 'update') return `${t(e.from !== e.to ? 'moved' : 'edited')} · ${e.title}${e.from !== e.to ? ` · ${t(e.from)} → ${t(e.to)}` : ''}`;
-  if (e.kind === 'project') return `${t('projectUpdated')} · ${e.title}`;
-  return t('projectNote');
+const names = {todo: 'Up next', doing: 'In progress', done: 'Done', blocked: 'Blocked'};
+const colors = {todo: '#7f8ca0', doing: '#59c8ff', done: '#4df0b4', blocked: '#ff6f4d'};
+const still = matchMedia('(prefers-reduced-motion: reduce)');
+const field = createField($('field'));
+
+let state = {projects: [], tasks: [], events: [], revision: 0};
+let token, source, connected = false, booted = false;
+let selectedProject = new URLSearchParams(location.search).get('project') || localStorage.getItem('workboard-project');
+let renderedProject, selectedTask, selectedUpdatedAt, createType, ownerFilter = null;
+const cards = new Map();      // task id -> element, for the selected project
+const seenStatus = new Map(); // task id -> status at the previous render
+const seenEvents = new Set();
+let cometAngle = 0, shownDone = null, shownFocus = null;
+
+const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
+const pad = n => String(n).padStart(2, '0');
+const clock = value => new Date(value).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
+const fullTime = value => new Date(value).toLocaleString('en-US');
+function age(since, precise) {
+  const s = Math.max(0, Math.floor((Date.now() - new Date(since)) / 1000));
+  const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
+  if (precise) return `${h ? pad(h) + ':' : ''}${pad(m)}:${pad(s % 60)}`;
+  return h ? `${h}h ${pad(m)}m` : m ? `${m}m` : `${s}s`;
 }
-function render() {
-  document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en';
-  document.querySelectorAll('[data-i18n]').forEach(el => { el.textContent = t(el.dataset.i18n); });
-  document.body.classList.toggle('compact', compact);
-  $('compact').textContent = t(compact ? 'expanded' : 'compact');
-  $('compact').setAttribute('aria-pressed', String(compact));
-  connection();
-  let project = state.projects.find(p => p.id === selectedProject) || state.projects[0];
-  if (project) selectedProject = project.id;
-  $('projects').innerHTML = state.projects.map(p => `<button class="project-link${p.id === selectedProject ? ' active' : ''}" data-project="${esc(p.id)}"${p.id === selectedProject ? ' aria-current="page"' : ''}>${esc(p.title)}</button>`).join('');
-  $('title').textContent = project?.title || t('noProject');
-  $('crumb').textContent = project?.title || 'Workboard';
-  $('goal').textContent = project?.goal || t('noProjectGoal');
-  document.title = (project?.title || 'Agent Workboard') + ' · Workboard';
-  const tasks = state.tasks.filter(task => task.projectId === selectedProject);
-  const doing = tasks.find(task => task.status === 'doing');
-  const blocked = tasks.find(task => task.status === 'blocked');
-  const allDone = tasks.length > 0 && tasks.every(task => task.status === 'done');
-  const focus = doing || blocked;
-  $('focus-title').textContent = focus?.title || t(allDone ? 'allDone' : 'noFocus');
-  $('focus-note').textContent = focus?.note || t(allDone ? 'allDoneNote' : 'noFocusNote');
-  $('focus').querySelector('.focus-label').textContent = blocked && !doing ? t('blocked') : t('focus');
-  $('updated').textContent = project ? `${t('updated')} ${clock(project.updatedAt)}` : '';
-  $('task-count').textContent = labels[lang].taskCount(tasks.length);
-  $('revision').textContent = `r${state.revision || 0}`;
-  const completed = tasks.filter(task => task.status === 'done').length;
-  $('completion').textContent = `${completed} / ${tasks.length} completed`;
-  $('progress-fill').style.width = `${tasks.length ? 100 * completed / tasks.length : 0}%`;
-  $('progress-track').setAttribute('aria-valuenow', String(completed));
-  $('progress-track').setAttribute('aria-valuemax', String(Math.max(1, tasks.length)));
-  $('board').innerHTML = statuses.map(status => {
-    const group = tasks.filter(task => task.status === status);
-    return `<section class="column ${status}" data-status="${status}" aria-label="${t(status)}"><div class="column-head"><span class="status-dot"></span>${t(status)}<span class="count">${group.length}</span><button class="plus" data-add="${status}" aria-label="${esc(t('newTaskTitle') + ' · ' + t(status))}">+</button></div>${group.length ? group.map(task => `<button class="task" draggable="true" data-task="${esc(task.id)}"><span class="task-code"><span>${esc(task.id)}</span><span>···</span></span><h3>${esc(task.title)}</h3><p class="task-note">${esc(task.note || '—')}</p><span class="task-foot"><span class="avatar">${esc(task.owner?.slice(0,1))}</span><span>${esc(task.owner)}</span>${task.evidence ? `<span class="evidence-tag" title="${esc(task.evidence)}">✓ ${t('verified')}</span>` : ''}</span></button>`).join('') : `<div class="empty">${t('empty')}</div>`}</section>`;
+const known = {'You': 'a0', 'Claude Code': 'a1', 'Codex': 'a2'};
+const agentClass = name => known[name] || 'a' + (3 + [...String(name)].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4);
+function monogram(name) {
+  const words = String(name || '?').trim().split(/\s+/);
+  return (words.length > 1 ? words[0][0] + words[1][0] : words[0].slice(0, 2)).toUpperCase();
+}
+function replay(el, name) { el.classList.remove(name); void el.getBoundingClientRect(); el.classList.add(name); }
+function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 4200); }
+
+function eventLine(e) {
+  const who = `<b>${esc(e.actor)}</b>`, what = `<em>${esc(e.title)}</em>`;
+  if (e.kind === 'create') return `${who} added ${what}`;
+  if (e.kind === 'update') return e.from !== e.to ? `${who} moved ${what}<span class="route">${names[e.from]} → ${names[e.to]}</span>` : `${who} updated ${what}`;
+  if (e.kind === 'project') return `${who} set up the project`;
+  return `${who} left a project note`;
+}
+function eventItem(e, fresh) {
+  const detail = e.to === 'done' && e.evidence ? e.evidence : e.note;
+  return `<li class="event ${e.kind === 'create' ? 'todo' : e.to || ''}${fresh ? ' fresh' : ''}"${e.taskId ? ` data-task="${esc(e.taskId)}"` : ''}><time datetime="${esc(e.at)}" title="${esc(fullTime(e.at))}">${clock(e.at)}</time><p>${eventLine(e)}</p>${detail ? `<p class="detail">${esc(detail)}</p>` : ''}</li>`;
+}
+
+/* Progress ring: one arc per card, in plan order, clockwise from the top. */
+const point = (r, deg) => { const t = (deg - 90) * Math.PI / 180; return `${(160 + r * Math.cos(t)).toFixed(2)} ${(160 + r * Math.sin(t)).toFixed(2)}`; };
+const arc = (r, from, to) => `M${point(r, from)}A${r} ${r} 0 ${to - from > 180 ? 1 : 0} 1 ${point(r, to)}`;
+const segment = (index, total) => { const size = 360 / total, gap = total > 1 ? Math.min(7, size * .22) : .01; return [index * size + gap / 2, (index + 1) * size - gap / 2]; };
+function buildOrbit() {
+  let ticks = '';
+  for (let i = 0; i < 72; i++) ticks += `<path${i % 6 ? '' : ' class="major"'} d="M${point(136, i * 5)}L${point(i % 6 ? 141 : 146, i * 5)}"/>`;
+  $('orbit').innerHTML = `<g class="ticks">${ticks}</g><circle class="inner" cx="160" cy="160" r="94"/><circle class="track" cx="160" cy="160" r="118"/><g id="segments"></g><g class="comet" id="comet"><circle cx="160" cy="42" r="3.5"/></g><text class="count" id="orbit-count" x="160" y="184"></text><text class="of" id="orbit-of" x="160" y="212"></text>`;
+}
+function renderOrbit(tasks, draw) {
+  $('segments').innerHTML = tasks.map((task, i) => {
+    const [from, to] = segment(i, tasks.length), d = arc(118, from, to);
+    return `<path class="seg ${task.status}${draw ? ' draw' : ''}" pathLength="1" d="${d}" data-task="${esc(task.id)}"><title>${esc(task.title)} · ${names[task.status]}</title></path>${task.status === 'doing' ? `<path class="flow" d="${d}"/>` : ''}`;
   }).join('');
-  const events = state.events.filter(e => e.projectId === selectedProject).slice(0,8);
-  $('events').innerHTML = events.length ? events.map(e => `<li class="event"><span class="event-mark" aria-hidden="true">${e.to === 'done' ? '✓' : '·'}</span><div><p><strong>${esc(e.actor)}</strong> ${esc(eventText(e))}</p>${e.note ? `<small>${esc(e.note)}</small>` : ''}</div><time datetime="${esc(e.at)}" title="${esc(fullTime(e.at))}">${clock(e.at)}</time></li>`).join('') : `<li class="empty">${t('emptyActivity')}</li>`;
-  // Do not overwrite a person's unsaved edits when an agent update arrives.
-  if ($('detail').open) renderHistory();
+  if (draw) $('segments').querySelectorAll('.draw').forEach((el, i) => el.style.setProperty('--i', i));
+  const done = tasks.filter(task => task.status === 'done').length;
+  $('orbit-count').textContent = tasks.length ? pad(done) : '—';
+  $('orbit-of').textContent = tasks.length ? `OF ${pad(tasks.length)} DONE` : 'NO TASKS YET';
+  $('ghost').textContent = tasks.length ? `${pad(done)}/${pad(tasks.length)}` : '';
+  if (shownDone !== null && shownDone !== done) replay($('orbit-count'), 'tick');
+  shownDone = done;
 }
-function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 4500); }
+// A point of light travels the ring to the card that just changed.
+function comet(index, total) {
+  if (still.matches || !total) return;
+  const [from, to] = segment(index, total);
+  let target = (from + to) / 2;
+  while (target <= cometAngle) target += 360;
+  $('comet').animate([
+    {transform: `rotate(${cometAngle}deg)`, opacity: 0},
+    {opacity: 1, offset: .12}, {opacity: 1, offset: .82},
+    {transform: `rotate(${target}deg)`, opacity: 0}
+  ], {duration: 1100, easing: 'cubic-bezier(.5,0,.2,1)'});
+  cometAngle = target % 360;
+}
+
+function cardMarkup(task) {
+  const proof = task.status === 'done'
+    ? task.evidence ? `<p class="proof"><b>Evidence</b>${esc(task.evidence)}</p>` : '<p class="proof missing">Marked done without evidence</p>'
+    : task.note ? `<p class="note">${esc(task.note)}</p>` : '';
+  return `<span class="card-top"><span>${esc(task.id)}</span><span class="age" data-since="${esc(task.statusAt || task.updatedAt)}">${age(task.statusAt || task.updatedAt)}</span></span><h3>${esc(task.title)}</h3>${proof}<span class="card-foot"><span class="mono ${agentClass(task.owner)}">${esc(monogram(task.owner))}</span>${esc(task.owner)}${task.evidence && task.status !== 'done' ? '<span class="tag">EVIDENCE</span>' : ''}</span>`;
+}
+function land(el) {
+  replay(el, 'landed');
+  const box = el.getBoundingClientRect();
+  field.pulse(box.left + box.width / 2, box.top + box.height / 2);
+}
+// Cards keep their DOM node between renders, so a status change can fly from the old column to the new one.
+function renderBoard(tasks, animate) {
+  const before = new Map();
+  if (animate) for (const [id, el] of cards) before.set(id, el.getBoundingClientRect());
+  const alive = new Set();
+  for (const status of statuses) {
+    const group = tasks.filter(task => task.status === status), stack = $('stack-' + status);
+    $('count-' + status).textContent = pad(group.length);
+    group.forEach((task, i) => {
+      alive.add(task.id);
+      let el = cards.get(task.id);
+      if (!el) {
+        el = Object.assign(document.createElement('article'), {className: 'card', tabIndex: 0, draggable: true});
+        el.setAttribute('role', 'button'); el.dataset.task = task.id; cards.set(task.id, el);
+      }
+      const signature = JSON.stringify([task.title, task.note, task.evidence, task.owner, task.status, task.statusAt]);
+      if (el.signature !== signature) { el.signature = signature; el.innerHTML = cardMarkup(task); }
+      el.dataset.status = task.status;
+      el.classList.toggle('dim', Boolean(ownerFilter) && task.owner !== ownerFilter);
+      if (stack.children[i] !== el) stack.insertBefore(el, stack.children[i] || null);
+    });
+  }
+  for (const [id, el] of cards) if (!alive.has(id)) { el.remove(); cards.delete(id); seenStatus.delete(id); }
+  let entering = 0;
+  tasks.forEach((task, index) => {
+    const el = cards.get(task.id), was = before.get(task.id);
+    const moved = seenStatus.has(task.id) && seenStatus.get(task.id) !== task.status;
+    seenStatus.set(task.id, task.status);
+    if (!was) {
+      el.style.setProperty('--i', entering++);
+      el.classList.add('enter');
+      el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true});
+      return;
+    }
+    if (moved) comet(index, tasks.length);
+    if (still.matches) return;
+    const now = el.getBoundingClientRect(), dx = was.left - now.left, dy = was.top - now.top;
+    if (Math.abs(dx) + Math.abs(dy) < 2) { if (moved) land(el); return; }
+    el.classList.toggle('flying', moved);
+    el.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'translate(0, 0)'}], {duration: moved ? 900 : 450, easing: 'cubic-bezier(.22,1,.36,1)'})
+      .onfinish = () => { el.classList.remove('flying'); if (moved) land(el); };
+  });
+}
+
+function favicon(color) {
+  $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#05070b"/><circle cx="16" cy="16" r="9" fill="none" stroke="${color}" stroke-width="4"/></svg>`);
+}
+function connection() {
+  $('connection').textContent = connected ? 'LIVE' : 'RECONNECTING';
+  $('connection').classList.toggle('offline', !connected);
+  $('connection').title = connected ? 'Connected to the local board service' : 'Showing the last known state while disconnected.';
+  document.body.classList.toggle('live', connected);
+}
+
+function render() {
+  connection();
+  const project = state.projects.find(p => p.id === selectedProject) || state.projects[0];
+  if (state.projects.length) selectedProject = project.id;
+  const switched = renderedProject !== selectedProject;
+  if (switched) {
+    for (const el of cards.values()) el.remove();
+    cards.clear(); seenStatus.clear(); seenEvents.clear();
+    ownerFilter = null; shownDone = null; shownFocus = null; renderedProject = selectedProject;
+  }
+  const tasks = state.tasks.filter(task => task.projectId === selectedProject);
+  const by = status => tasks.filter(task => task.status === status);
+  const done = by('done').length, blocked = by('blocked'), doing = by('doing').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
+
+  $('project').innerHTML = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(p.title)}</option>`).join('') + '<option value="">+ New project</option>';
+  $('strip').innerHTML = tasks.map(task => `<i class="${task.status}"></i>`).join('');
+  $('kicker').textContent = project ? `Project · ${project.id}` : 'Workboard';
+  $('title').textContent = project?.title || 'No project yet';
+  $('goal').textContent = project?.goal || (project ? '' : 'Your assistant creates the plan after understanding the goal, then keeps every card up to date while it works.');
+  document.title = `${blocked.length ? '⚠ ' : ''}${tasks.length ? `${done}/${tasks.length} · ` : ''}${project?.title || 'Workboard'}`;
+  favicon(blocked.length ? colors.blocked : doing.length ? colors.doing : tasks.length && done === tasks.length ? colors.done : colors.todo);
+
+  const owners = [...new Set(tasks.map(task => task.owner))];
+  $('agents').innerHTML = owners.map(owner => {
+    const mine = tasks.filter(task => task.owner === owner), finished = mine.filter(task => task.status === 'done').length;
+    return `<button class="agent ${agentClass(owner)}${ownerFilter === owner ? ' on' : ''}" data-owner="${esc(owner)}" aria-pressed="${ownerFilter === owner}" title="Highlight this owner's cards"><span class="mono ${agentClass(owner)}">${esc(monogram(owner))}</span>${esc(owner)}<small>${finished}/${mine.length}</small></button>`;
+  }).join('');
+
+  renderOrbit(tasks, switched);
+
+  const focus = doing[0] || blocked[0], complete = tasks.length > 0 && done === tasks.length;
+  const mode = doing[0] ? 'doing' : blocked[0] ? 'blocked' : complete ? 'done' : 'idle';
+  $('focus').className = 'focus ' + mode;
+  $('focus').dataset.task = focus?.id || '';
+  $('focus-label').textContent = {doing: doing.length > 1 ? `WORKING ON NOW · ${doing.length} ACTIVE` : 'WORKING ON NOW', blocked: 'BLOCKED · NEEDS INPUT', done: 'PLAN COMPLETE', idle: 'STANDING BY'}[mode];
+  $('focus-title').textContent = focus?.title || (complete ? 'Every card is done' : 'No task is in progress');
+  $('focus-note').textContent = focus?.note || (complete ? 'Open the cards to review results and verification.' : 'This updates the moment your assistant starts a card.');
+  $('focus-clock').textContent = focus ? age(focus.statusAt || focus.updatedAt, true) : '';
+  if (focus) Object.assign($('focus-clock').dataset, {since: focus.statusAt || focus.updatedAt, precise: '1'}); else delete $('focus-clock').dataset.since;
+  $('focus-meta').innerHTML = focus ? `${esc(focus.owner)} · updated <span data-since="${esc(focus.updatedAt)}">${age(focus.updatedAt)}</span> ago` : '';
+  const focusKey = `${mode}/${focus?.id}/${focus?.note}`;
+  if (shownFocus !== null && shownFocus !== focusKey) replay($('focus').querySelector('.focus-main'), 'swap');
+  shownFocus = focusKey;
+
+  renderBoard(tasks, booted && !switched);
+
+  const events = state.events.filter(e => e.projectId === selectedProject).slice(0, 40);
+  $('events').innerHTML = events.length ? events.map(e => eventItem(e, booted && !switched && !seenEvents.has(e.id))).join('') : '<li class="empty">Changes will appear here as they happen.</li>';
+  events.forEach(e => seenEvents.add(e.id));
+  $('revision').textContent = `r${state.revision || 0}`;
+
+  // Never overwrite a person's unsaved edits when an assistant update arrives; flag it instead.
+  if ($('detail').open) {
+    const task = tasks.find(task => task.id === selectedTask);
+    $('detail-stale').hidden = !task || task.updatedAt === selectedUpdatedAt;
+    renderHistory();
+  }
+}
+
 async function send(command) {
-  const res = await fetch('/api/command', {method:'POST', headers:{'Content-Type':'application/json','X-Board-Token':token}, body:JSON.stringify(command)});
+  const res = await fetch('/api/command', {method: 'POST', headers: {'Content-Type': 'application/json', 'X-Board-Token': token}, body: JSON.stringify(command)});
   const result = await res.json();
   if (!res.ok) throw new Error(result.error);
   return result;
 }
 function renderHistory() {
-  const events = state.events.filter(e => e.taskId === selectedTask && e.projectId === selectedProject).slice(0,5);
-  $('task-history').innerHTML = `<strong>${t('history')}</strong>${events.map(e => `<p>${esc(fullTime(e.at))} · ${esc(e.actor)}<br>${esc(eventText(e))}</p>`).join('')}`;
+  const events = state.events.filter(e => e.taskId === selectedTask && e.projectId === selectedProject).slice(0, 30);
+  $('task-history').innerHTML = events.map(e => eventItem({...e, taskId: null}, false)).join('') || '<li class="empty">No recorded changes yet.</li>';
 }
 function openTask(id) {
   const task = state.tasks.find(task => task.id === id && task.projectId === selectedProject);
   if (!task) return;
-  selectedTask = id;
-  selectedUpdatedAt = task.updatedAt;
-  $('detail-title').textContent = task.title;
-  $('detail-meta').textContent = `${task.id} · ${task.owner} · ${t('updated')} ${fullTime(task.updatedAt)}${task.status === 'done' && !task.evidence ? ' · ' + t('unverified') : ''}`;
-  $('detail-status').innerHTML = statuses.map(s => `<option value="${s}">${t(s)}</option>`).join('');
-  $('detail-status').value = task.status;
+  selectedTask = id; selectedUpdatedAt = task.updatedAt;
+  $('detail-id').textContent = `${task.id} · updated ${fullTime(task.updatedAt)}`;
+  $('detail-stale').hidden = true;
+  $('detail-title').value = task.title;
+  $('detail-owner').value = task.owner;
+  $('detail-status').innerHTML = statuses.map(s => `<label class="${s}"><input type="radio" name="status" value="${s}"${s === task.status ? ' checked' : ''}><span>${names[s]}</span></label>`).join('');
   $('detail-note').value = task.note;
   $('detail-evidence').value = task.evidence;
   renderHistory();
   $('detail').showModal();
 }
-function openCreate(type, status = 'todo') {
-  if (type === 'task' && !state.projects.some(p => p.id === selectedProject)) return toast(t('selectProject'));
-  createType = type; createStatus = status;
-  $('create-heading').textContent = t(type === 'project' ? 'newProjectTitle' : 'newTaskTitle');
-  $('create-note-label').textContent = t(type === 'project' ? 'goal' : 'note');
+function openCreate(type) {
+  if (type === 'task' && !state.projects.some(p => p.id === selectedProject)) return toast('Create a project first');
+  createType = type;
+  $('create-heading').textContent = type === 'project' ? 'New project' : 'Add task';
+  $('create-note-label').textContent = type === 'project' ? 'Project goal' : 'First step or context';
   $('create-form').reset();
   $('create').showModal();
 }
+
 document.addEventListener('click', e => {
   const close = e.target.closest('[data-close]');
-  if (close) $(close.dataset.close).close();
-  const project = e.target.closest('[data-project]');
-  if (project) { selectedProject = project.dataset.project; localStorage.setItem('workboard-project', selectedProject); render(); }
+  if (close) return $(close.dataset.close).close();
+  const owner = e.target.closest('[data-owner]');
+  if (owner) { ownerFilter = ownerFilter === owner.dataset.owner ? null : owner.dataset.owner; return render(); }
   const task = e.target.closest('[data-task]');
-  if (task) openTask(task.dataset.task);
-  const add = e.target.closest('[data-add]');
-  if (add) openCreate('task', add.dataset.add);
+  if (task?.dataset.task && !e.target.closest('dialog')) openTask(task.dataset.task);
 });
-$('new-project').onclick = () => openCreate('project');
+document.addEventListener('keydown', e => {
+  if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.card')) { e.preventDefault(); openTask(e.target.dataset.task); }
+});
+$('project').onchange = e => {
+  if (!e.target.value) { e.target.value = selectedProject || ''; return openCreate('project'); }
+  selectedProject = e.target.value; localStorage.setItem('workboard-project', selectedProject); render();
+};
 $('new-task').onclick = () => openCreate('task');
-$('compact').onclick = () => { compact = !compact; localStorage.setItem('workboard-compact', String(compact)); render(); };
+$('handoff').onclick = async () => {
+  try {
+    const res = await fetch('/api/summary?project=' + encodeURIComponent(selectedProject || ''));
+    const text = await res.text();
+    if (!res.ok) throw new Error(JSON.parse(text).error);
+    await navigator.clipboard.writeText(text);
+    toast('Handoff summary copied as Markdown');
+  } catch (error) { toast(error.message || 'Could not copy the summary'); }
+};
 $('detail-form').onsubmit = async e => {
   e.preventDefault();
   const submit = e.submitter; submit.disabled = true;
-  try { await send({type:'task', project:selectedProject, id:selectedTask, expectedUpdatedAt:selectedUpdatedAt, status:$('detail-status').value, note:$('detail-note').value, evidence:$('detail-evidence').value}); $('detail').close(); toast(t('saved')); }
-  catch (error) { toast(error.message); } finally { submit.disabled = false; }
+  try {
+    await send({type: 'task', project: selectedProject, id: selectedTask, expectedUpdatedAt: selectedUpdatedAt, title: $('detail-title').value, owner: $('detail-owner').value, status: new FormData(e.target).get('status'), note: $('detail-note').value, evidence: $('detail-evidence').value});
+    $('detail').close(); toast('Changes saved');
+  } catch (error) { toast(error.message); } finally { submit.disabled = false; }
 };
 $('create-form').onsubmit = async e => {
-  e.preventDefault(); const submit = e.submitter; submit.disabled = true;
+  e.preventDefault();
+  const submit = e.submitter; submit.disabled = true;
   try {
-    const id = (createType === 'project' ? 'project-' : 'task-') + crypto.randomUUID().slice(0,8);
-    const command = {type:createType, title:$('create-title').value};
-    if (createType === 'project') Object.assign(command, {project:id, goal:$('create-note').value});
-    else Object.assign(command, {project:selectedProject, id, status:createStatus, note:$('create-note').value, owner:'You'});
+    const id = (createType === 'project' ? 'project-' : 'task-') + crypto.randomUUID().slice(0, 8);
+    const command = {type: createType, title: $('create-title').value};
+    if (createType === 'project') Object.assign(command, {project: id, goal: $('create-note').value});
+    else Object.assign(command, {project: selectedProject, id, status: 'todo', note: $('create-note').value, owner: 'You'});
     await send(command);
     if (createType === 'project') { selectedProject = id; localStorage.setItem('workboard-project', id); }
-    $('create').close(); toast(t('created'));
+    $('create').close(); toast('Created');
     await load();
   } catch (error) { toast(error.message); } finally { submit.disabled = false; }
 };
+
 let dragging;
-$('board').addEventListener('dragstart', e => { const task = e.target.closest('[data-task]'); if (task) { dragging = task.dataset.task; e.dataTransfer.setData('text/plain', dragging); e.dataTransfer.effectAllowed = 'move'; } });
-$('board').addEventListener('dragover', e => { const col = e.target.closest('[data-status]'); if (dragging && col) { e.preventDefault(); document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); col.classList.add('drag-over'); } });
-$('board').addEventListener('dragend', () => { dragging = null; document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); });
-$('board').addEventListener('drop', async e => { const col = e.target.closest('[data-status]'); if (!dragging || !col) return; e.preventDefault(); const id = dragging; dragging = null; document.querySelectorAll('.drag-over').forEach(el => el.classList.remove('drag-over')); try { await send({type:'task',project:selectedProject,id,status:col.dataset.status}); } catch (error) { toast(error.message); } });
-async function load() { const res = await fetch('/api/state'); if (!res.ok) throw new Error('Board unavailable'); const value = await res.json(); state = value.state; token = value.token; render(); }
+const clearOver = () => document.querySelectorAll('.over').forEach(el => el.classList.remove('over'));
+$('board').addEventListener('dragstart', e => { const card = e.target.closest('.card'); if (card) { dragging = card.dataset.task; e.dataTransfer.setData('text/plain', dragging); e.dataTransfer.effectAllowed = 'move'; } });
+$('board').addEventListener('dragover', e => { const column = e.target.closest('.column'); if (dragging && column) { e.preventDefault(); clearOver(); column.classList.add('over'); } });
+$('board').addEventListener('dragend', () => { dragging = null; clearOver(); });
+$('board').addEventListener('drop', async e => {
+  const column = e.target.closest('.column');
+  if (!dragging || !column) return;
+  e.preventDefault();
+  const id = dragging; dragging = null; clearOver();
+  try { await send({type: 'task', project: selectedProject, id, status: column.dataset.status}); } catch (error) { toast(error.message); }
+});
+
+// Elapsed times tick without re-rendering the board.
+setInterval(() => document.querySelectorAll('[data-since]').forEach(el => { el.textContent = age(el.dataset.since, el.dataset.precise); }), 1000);
+let queued = false;
+addEventListener('scroll', () => {
+  if (queued) return;
+  queued = true;
+  requestAnimationFrame(() => {
+    queued = false;
+    document.documentElement.style.setProperty('--scroll', Math.min(1, scrollY / 340).toFixed(3));
+    document.body.classList.toggle('scrolled', scrollY > 12);
+  });
+}, {passive: true});
+
+async function load() {
+  const res = await fetch('/api/state');
+  if (!res.ok) throw new Error('Board unavailable');
+  const value = await res.json();
+  state = value.state; token = value.token;
+  render();
+}
 async function start() {
   try {
     await load();
+    if (!booted) setTimeout(() => { document.body.classList.remove('booting'); booted = true; }, 650);
     source?.close(); source = new EventSource('/api/events');
     source.addEventListener('board', e => { state = JSON.parse(e.data); connected = true; render(); });
     source.onopen = () => { connected = true; connection(); load().catch(() => {}); };
@@ -145,5 +333,9 @@ async function start() {
 }
 // Refresh the mutation token after a server restart, without losing card selection.
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load().catch(() => {}); });
-window.addEventListener('online', () => load().catch(() => {}));
-render(); start();
+addEventListener('online', () => load().catch(() => {}));
+
+$('board').innerHTML = statuses.map(s => `<section class="column ${s}" data-status="${s}" aria-label="${names[s]}"><header><i></i><h2>${names[s]}</h2><span class="count" id="count-${s}">00</span></header><div class="stack" id="stack-${s}"></div></section>`).join('');
+buildOrbit();
+render();
+start();

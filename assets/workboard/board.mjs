@@ -1,9 +1,13 @@
 import fs from 'node:fs';
-import {update, readState} from './store.mjs';
+import {update, readState, summarize} from './store.mjs';
 
 const [type, ...args] = process.argv.slice(2);
 try {
   if (type === 'show') { console.log(JSON.stringify(readState(), null, 2)); }
+  else if (type === 'summary') {
+    if (args.length && !(args.length === 2 && args[0] === '--project')) throw new Error('Use: summary [--project ID]');
+    process.stdout.write(summarize(readState(), args[1]));
+  }
   else if (type === 'apply') {
     const source = args[0] ? fs.readFileSync(args[0], 'utf8') : fs.readFileSync(0, 'utf8');
     const commands = JSON.parse(source.replace(/^\uFEFF/, ''));

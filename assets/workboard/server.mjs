@@ -2,7 +2,7 @@ import http from 'node:http';
 import fs from 'node:fs';
 import path from 'node:path';
 import {randomBytes, createHash} from 'node:crypto';
-import {root, dataFile, readState, update} from './store.mjs';
+import {root, dataFile, version, readState, update, summarize} from './store.mjs';
 
 const port = Number(process.env.BOARD_PORT || 4318);
 const token = randomBytes(24).toString('hex');
@@ -12,14 +12,14 @@ let state = readState();
 function refresh() {
   try {
     const next = readState();
-    if (JSON.stringify(next) !== JSON.stringify(state)) {
+    if (next.revision !== state.revision || next.updatedAt !== state.updatedAt) {
       state = next;
       for (const client of clients) client.write(`event: board\ndata: ${JSON.stringify(state)}\n\n`);
     }
   } catch (e) { console.error('State reload failed:', e.message); }
 }
-function json(res, status, value) { res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); }
-const files = {'/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/style.css': ['style.css', 'text/css']};
+function json(res, status, value) { if (res.headersSent) return res.end(); res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); }
+const files = {'/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/field.js': ['field.js', 'text/javascript'], '/style.css': ['style.css', 'text/css']};
 const server = http.createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -30,8 +30,14 @@ const server = http.createServer(async (req, res) => {
   if (origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(origin)) return json(res, 403, {error: 'Cross-origin access denied.'});
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   try {
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, {app:'live-coding-kanban',version:'1.0.0',workspaceId,pid:process.pid,port});
+    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, {app:'live-coding-kanban',version,workspaceId,pid:process.pid,port});
     if (req.method === 'GET' && url.pathname === '/api/state') { refresh(); return json(res, 200, {state, token}); }
+    if (req.method === 'GET' && url.pathname === '/api/summary') {
+      refresh();
+      const text = summarize(state, url.searchParams.get('project') || undefined);
+      res.writeHead(200, {'Content-Type': 'text/markdown; charset=utf-8'});
+      return res.end(text);
+    }
     if (req.method === 'GET' && url.pathname === '/api/events') {
       res.writeHead(200, {'Content-Type': 'text/event-stream', Connection: 'keep-alive'});
       clients.add(res);

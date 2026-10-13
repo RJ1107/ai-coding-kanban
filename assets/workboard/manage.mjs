@@ -4,7 +4,7 @@ import net from 'node:net';
 import {spawn} from 'node:child_process';
 import {createHash} from 'node:crypto';
 import {fileURLToPath} from 'node:url';
-import {root, dataFile} from './store.mjs';
+import {root, dataFile, version} from './store.mjs';
 
 const configFile=path.join(root,'config.json');
 const marker=path.join(root,'data','server.json');
@@ -15,7 +15,14 @@ async function portFree(port){const server=net.createServer();return new Promise
 export async function start(preferred){
  const config=fs.existsSync(configFile)?JSON.parse(fs.readFileSync(configFile,'utf8')):{};
  const previous=fs.existsSync(marker)?JSON.parse(fs.readFileSync(marker,'utf8')):null;
- if(previous){const info=await health(previous.port);if(info?.workspaceId===workspaceId && info.pid===previous.pid)return {...info,url:`http://127.0.0.1:${info.port}`,reused:true};}
+ if(previous){
+  const info=await health(previous.port);
+  if(info?.workspaceId===workspaceId && info.pid===previous.pid){
+   if(info.version===version)return {...info,url:`http://127.0.0.1:${info.port}`,reused:true};
+   // The runtime files were upgraded underneath an older owned viewer; replace only that process.
+   await stop();
+  }
+ }
  const base=Number(preferred||config.port||4318);
  if(!Number.isInteger(base)||base<1024||base>65480)throw new Error('Choose a port between 1024 and 65480.');
  let port;

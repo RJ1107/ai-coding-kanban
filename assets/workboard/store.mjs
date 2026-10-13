@@ -5,6 +5,7 @@ import {randomUUID} from 'node:crypto';
 
 export const root = path.dirname(fileURLToPath(import.meta.url));
 export const dataFile = path.resolve(process.env.BOARD_DATA || path.join(root, 'data', 'board.json'));
+export const version = '2.0.0';
 export const statuses = ['todo', 'doing', 'done', 'blocked'];
 const empty = () => ({schema: 1, revision: 0, projects: [], tasks: [], events: [], updatedAt: null});
 export function readState() {
@@ -48,8 +49,9 @@ export function apply(state, command) {
       const from = existing?.status ?? null;
       const changes = {title, status, note, evidence, owner};
       if (existing && Object.entries(changes).every(([k, v]) => existing[k] === v)) return {changed: false, result: id};
-      if (existing) Object.assign(existing, changes, {updatedAt: now});
-      else state.tasks.push({id, projectId, ...changes, createdAt: now, updatedAt: now});
+      // statusAt records when the card entered its current column, so the viewer can show real elapsed time.
+      if (existing) Object.assign(existing, changes, {updatedAt: now, statusAt: from === status ? existing.statusAt ?? existing.updatedAt : now});
+      else state.tasks.push({id, projectId, ...changes, createdAt: now, updatedAt: now, statusAt: now});
       event = {kind: existing ? 'update' : 'create', taskId: id, title, from, to: status, note, evidence};
       result = id;
     } else if (command.type === 'note') {
@@ -63,6 +65,30 @@ export function apply(state, command) {
   state.events.unshift({id: randomUUID(), at: now, actor, projectId, ...event});
   state.events = state.events.slice(0, 500);
   return {changed: true, result};
+}
+const headings = {doing: 'In progress', blocked: 'Blocked', todo: 'Up next', done: 'Done'};
+// Markdown a person or the next assistant can read to continue without opening the viewer.
+export function summarize(state, projectId) {
+  const project = state.projects.find(p => p.id === projectId) || (projectId ? null : state.projects[0]);
+  if (!project) throw new Error(projectId ? `Project '${projectId}' does not exist.` : 'No project exists yet.');
+  const tasks = state.tasks.filter(t => t.projectId === project.id);
+  const count = status => tasks.filter(t => t.status === status).length;
+  const lines = [`# Handoff: ${project.title}`, ''];
+  if (project.goal) lines.push(`Goal: ${project.goal}`, '');
+  lines.push(`Progress: ${count('done')}/${tasks.length} done, ${count('doing')} in progress, ${count('blocked')} blocked, ${count('todo')} up next. Project ID \`${project.id}\`, revision r${state.revision}, updated ${project.updatedAt}.`);
+  for (const status of ['doing', 'blocked', 'todo', 'done']) {
+    const group = tasks.filter(t => t.status === status);
+    if (!group.length) continue;
+    lines.push('', `## ${headings[status]}`);
+    for (const task of group) {
+      lines.push(`- \`${task.id}\` ${task.title} (owner: ${task.owner})`);
+      if (task.note) lines.push(`  - ${status === 'blocked' ? 'Blocker' : 'Latest'}: ${task.note.replace(/\s+/g, ' ')}`);
+      if (task.evidence) lines.push(`  - Evidence: ${task.evidence.replace(/\s+/g, ' ')}`);
+    }
+  }
+  const notes = state.events.filter(e => e.projectId === project.id && e.kind === 'note').slice(0, 5);
+  if (notes.length) lines.push('', '## Project notes', ...notes.map(e => `- ${e.at} ${e.actor}: ${e.note.replace(/\s+/g, ' ')}`));
+  return lines.join('\n') + '\n';
 }
 export async function update(command) {
   fs.mkdirSync(path.dirname(dataFile), {recursive: true});
