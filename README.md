@@ -1,4 +1,4 @@
-# Live Coding Kanban
+# AI Coding Kanban
 
 **See what your coding assistant has done, what it is working on, and what comes next.**
 
@@ -14,7 +14,7 @@ The media shows this skill's actual development board receiving real command-lin
 
 Download or clone this repository, then give your coding agent this prompt:
 
-> Read `live-coding-kanban/SKILL.md`. Use it to show a live board beside my editor while implementing my task. Create the plan after understanding the project, keep the board updated during the work, and attach the actual checks when a task is done. Keep the board and cards in English.
+> Read `SKILL.md` in this repository. Use it to show a live board beside my editor while implementing my task. Create the plan after understanding the project, keep the board updated during the work, and attach the actual checks when a task is done. Keep the board and cards in English.
 
 Replace the path with wherever you saved this folder. The agent needs file access, permission to run local commands, and Node.js 22+. The board itself has no dependencies, no model API key and no paid service.
 
