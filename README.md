@@ -6,9 +6,13 @@ A portable skill that puts a live board beside your coding agent. The agent keep
 
 ![The board receiving live updates from the command line](docs/media/live-board.webp)
 
-[Download the 42-second walkthrough with narration (MP4, 5 MB)](docs/media/live-board.mp4?raw=true) · [Full board](docs/media/board-overview.png) · [Side-panel layout](docs/media/side-panel.png) · [Read the skill](SKILL.md)
+**The 38-second walkthrough, with narration:**
 
-The clip is a browser recording of the real viewer. The plan in it (CSV export for a reports page) is a fictional sample; every change you see is a real `board.mjs` command sent to the running board during capture. Nothing is animated on a timer.
+https://github.com/user-attachments/assets/2f67fc1a-d679-49e8-bcb6-358ed62166f5
+
+[Download the MP4](docs/media/live-board.mp4?raw=true) · [Full board](docs/media/board-overview.png) · [Side-panel layout](docs/media/side-panel.png) · [Read the skill](SKILL.md)
+
+Both are browser recordings of the real viewer. The plan in it (CSV export for a reports page) is a fictional sample; every change you see is a real `board.mjs` command sent to the running board during capture. Nothing is animated on a timer. The narration is a synthetic voice.
 
 ## Try it with your agent
 

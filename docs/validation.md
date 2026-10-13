@@ -55,4 +55,4 @@ Unchanged from 1.0: Codex maintained its own board while building the first vers
 
 ## Demo media
 
-The clip and screenshots show a fictional plan (CSV export for a reports page). Every board change in the clip is a real `board.mjs` command run against the live viewer during capture. The MP4 narration is a synthetic system voice; its loudness was measured but nobody has listened to it for pronunciation. The packaged skill contains no personal task database, credentials or private project source.
+The clip and screenshots show a fictional plan (CSV export for a reports page). Every board change in the clip is a real `board.mjs` command run against the live viewer during capture. The MP4 narration is a synthetic voice (ElevenLabs Multilingual v2, voice Brian, through OpenRouter). Its clips were generated from the caption text and their loudness was measured; the assistant that produced it cannot hear, so pronunciation rests on the owner's review. The packaged skill contains no personal task database, credentials or private project source.
