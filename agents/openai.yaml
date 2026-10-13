@@ -1,0 +1,4 @@
+interface:
+  display_name: "Live Coding Kanban"
+  short_description: "Keep real coding progress visible in a live board"
+  default_prompt: "Use $live-coding-kanban to show a live progress board while implementing my task."

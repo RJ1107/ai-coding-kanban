@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Live Coding Kanban</title><link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div class="shell">
+    <aside class="sidebar">
+      <div class="brand"><span class="brand-mark" aria-hidden="true">▥</span><div>Workboard<small>LIVE CODING KANBAN</small></div></div>
+      <div class="side-label" data-i18n="projects">PROJECTS</div>
+      <nav id="projects" aria-label="Projects"></nav>
+      <button class="new-project" id="new-project" data-i18n="newProject">+ New project</button>
+      <div class="sidebar-foot"><span class="local-dot"></span><span data-i18n="localOnly">Local workspace</span></div>
+    </aside>
+    <main>
+      <header class="topbar"><div class="breadcrumb"><span data-i18n="workspace">Workspace</span><span class="slash">/</span><strong id="crumb">—</strong></div><div class="top-actions"><span class="connection" id="connection" role="status">Connecting</span><button id="compact" class="quiet" data-i18n="compact">Side panel</button></div></header>
+      <section class="project-head"><div><div class="eyebrow" data-i18n="eyebrow">YOUR ASSISTANT. YOUR PROGRESS.</div><h1 id="title">Agent Workboard</h1><p id="goal"></p></div><button class="primary" id="new-task" data-i18n="newTask">+ Add task</button></section>
+      <section class="focus" id="focus" aria-label="Current focus"><span class="focus-icon" aria-hidden="true">↗</span><div><div class="focus-label" data-i18n="focus">WORKING ON NOW</div><strong id="focus-title"></strong><p id="focus-note"></p></div><span id="updated"></span></section>
+      <div class="progress-row"><span id="completion"></span><div id="progress-track" role="progressbar" aria-label="Completed tasks" aria-valuemin="0" aria-valuenow="0" aria-valuemax="1"><div id="progress-fill"></div></div></div><div class="board-meta"><span id="task-count"></span><span data-i18n="boardHelp">Open a card for context and evidence · Drag to change status</span></div>
+      <section id="board" class="board" aria-label="Task board"></section>
+      <section class="activity"><div class="section-heading"><h2 data-i18n="activity">Recent activity</h2><span data-i18n="recorded">A record of what changed</span></div><ol id="events"></ol></section>
+      <footer><span data-i18n="footer">Progress reported by your coding assistant.</span><span id="revision"></span></footer>
+    </main>
+  </div>
+  <div id="toast" role="alert" hidden></div>
+  <dialog id="detail"><form id="detail-form"><div class="dialog-top"><span class="eyebrow" data-i18n="taskDetail">TASK DETAILS</span><button type="button" class="close" data-close="detail" aria-label="Close">×</button></div><h2 id="detail-title"></h2><p class="detail-meta" id="detail-meta"></p><label><span id="detail-status-label" data-i18n="status">Status</span><select id="detail-status" aria-labelledby="detail-status-label"></select></label><label><span data-i18n="note">Latest progress / next step</span><textarea id="detail-note" rows="4" maxlength="2000"></textarea></label><label><span data-i18n="evidence">Results and verification</span><textarea id="detail-evidence" rows="3" maxlength="4000"></textarea></label><div id="task-history"></div><div class="dialog-actions"><button type="button" class="secondary" data-close="detail" data-i18n="cancel">Cancel</button><button class="primary" data-i18n="save">Save changes</button></div></form></dialog>
+  <dialog id="create"><form id="create-form"><div class="dialog-top"><h2 id="create-heading"></h2><button type="button" class="close" data-close="create" aria-label="Close">×</button></div><label><span data-i18n="name">Title</span><input id="create-title" required maxlength="160" autocomplete="off"></label><label><span id="create-note-label"></span><textarea id="create-note" rows="3" maxlength="2000"></textarea></label><div class="dialog-actions"><button type="button" class="secondary" data-close="create" data-i18n="cancel">Cancel</button><button class="primary" data-i18n="create">Create</button></div></form></dialog>
+  <script type="module" src="/app.js"></script>
+</body></html>

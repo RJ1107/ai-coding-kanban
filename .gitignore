@@ -1,0 +1,8 @@
+node_modules/
+.agent-workboard/
+.env
+*.log
+*.tmp
+*.lock
+__pycache__/
+*.workboard-backup-*
