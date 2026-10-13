@@ -4,9 +4,9 @@
 
 A portable skill that puts a live board beside your coding agent. The agent keeps coding and reports at real milestones; cards move on screen the moment it does. Tasks, owners, evidence and history survive handoffs between assistants.
 
-[![The board receiving live updates from the command line](docs/media/live-board.webp)](docs/media/live-board.mp4)
+![The board receiving live updates from the command line](docs/media/live-board.webp)
 
-[▶ Watch the 42-second walkthrough with narration](docs/media/live-board.mp4) · [Full board](docs/media/board-overview.png) · [Side-panel layout](docs/media/side-panel.png) · [Read the skill](SKILL.md)
+[Download the 42-second walkthrough with narration (MP4, 5 MB)](docs/media/live-board.mp4?raw=true) · [Full board](docs/media/board-overview.png) · [Side-panel layout](docs/media/side-panel.png) · [Read the skill](SKILL.md)
 
 The clip is a browser recording of the real viewer. The plan in it (CSV export for a reports page) is a fictional sample; every change you see is a real `board.mjs` command sent to the running board during capture. Nothing is animated on a timer.
 
