@@ -12,7 +12,7 @@ https://github.com/user-attachments/assets/2f67fc1a-d679-49e8-bcb6-358ed62166f5
 
 [Download the MP4](docs/media/live-board.mp4?raw=true) · [Full board](docs/media/board-overview.png) · [Side-panel layout](docs/media/side-panel.png) · [Read the skill](SKILL.md)
 
-Both are browser recordings of the real viewer. The plan in it (CSV export for a reports page) is a fictional sample; every change you see is a real `board.mjs` command sent to the running board during capture. Nothing is animated on a timer. The narration is a synthetic voice.
+Both are browser recordings of the real viewer. The plan they show (CSV export for a reports page) is a fictional sample; every change you see is a real `board.mjs` command sent to the running board during capture. Nothing is animated on a timer. The narration is a synthetic voice.
 
 ## Try it with your agent
 
