@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 
 export const root = path.dirname(fileURLToPath(import.meta.url));
 export const dataFile = path.resolve(process.env.BOARD_DATA || path.join(root, 'data', 'board.json'));
-export const version = '2.0.0';
+export const version = '2.1.0';
 export const statuses = ['todo', 'doing', 'done', 'blocked'];
 const empty = () => ({schema: 1, revision: 0, projects: [], tasks: [], events: [], updatedAt: null});
 export function readState() {

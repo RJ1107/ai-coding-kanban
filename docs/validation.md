@@ -1,6 +1,6 @@
 # Validation
 
-Version 2.0.0 was validated on Windows 11 with Node.js 24 and Chromium 153 on 13 October 2026. The runtime targets Node.js 22+ and uses platform-neutral Node APIs; macOS and Linux have not been executed.
+Versions 2.0.0 and 2.1.0 were validated on Windows 11 with Node.js 24 and Chromium 153 on 13 October 2026. The runtime targets Node.js 22+ and uses platform-neutral Node APIs; macOS and Linux have not been executed.
 
 ## Automated runtime checks
 
@@ -17,7 +17,7 @@ The summary-endpoint check was written for 2.0 and failed on its first run: aski
 
 ## Browser checks for the 2.0 viewer
 
-Scripted with Playwright driving Chromium against a running board. Ten checks pass:
+Scripted with Playwright driving Chromium against a running board. Eleven checks pass:
 
 - No horizontal overflow at 420, 860, 1024, 1360, 1440 and 1920 px wide, at the top of the page and scrolled.
 - A title containing literal markup is displayed as text and runs nothing.
@@ -28,6 +28,7 @@ Scripted with Playwright driving Chromium against a running board. Ten checks pa
 - Enter on a focused card and a click on a ring arc both open that card.
 - Adding a task, creating a second project from the menu and switching back.
 - The tab title carries the done count and the blocked warning.
+- With fourteen finished cards, the Done column stays at most 640 px tall and scrolls on its own while the page stays under 1800 px. A card finishing while that column is scrolled to its far end still flies across as a copy above the page, lands first in the list, and the column scrolls to show it (2.1.0).
 - Under reduced motion the board still updates live, with no flight and no running animations.
 
 The only console message during the run was the expected HTTP 400 for the refused stale save.

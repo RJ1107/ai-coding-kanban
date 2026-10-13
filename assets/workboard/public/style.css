@@ -176,7 +176,18 @@ h1 { margin: 0; max-width: 22ch; font: 600 clamp(30px, 4.2vw, 56px)/1.04 var(--d
 @keyframes beat-ion { 0% { box-shadow: 0 0 0 0 rgba(89, 200, 255, .6); } 100% { box-shadow: 0 0 0 8px rgba(89, 200, 255, 0); } }
 .column h2 { margin: 0; font: 600 12px var(--display); letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
 .column .count { margin-left: auto; font: 500 12px var(--mono); color: var(--faint); }
-.stack { display: flex; flex-direction: column; gap: 10px; min-height: 96px; padding-bottom: 8px; }
+/* Each column scrolls on its own, about four to five cards tall, so a long Done list does not push the page down. */
+.stack {
+  display: flex; flex-direction: column; gap: 10px; min-height: 96px; position: relative;
+  max-height: clamp(320px, calc(100vh - 250px), 640px); overflow-y: auto; overscroll-behavior: contain;
+  padding: 3px 6px 10px 3px; margin: -3px -6px 0 -3px; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent;
+}
+.stack > * { flex-shrink: 0; }
+/* More cards below: fade the bottom edge as a hint. */
+.stack.more { mask-image: linear-gradient(#000 calc(100% - 40px), transparent); }
+/* A card crossing between columns travels as a copy above the page, because a scroll box would clip the real one. */
+.card.ghost { position: fixed; z-index: 40; margin: 0; pointer-events: none; }
+.card.away { visibility: hidden; }
 .stack:empty::after { content: 'Nothing here'; padding: 26px 0; text-align: center; font: 11px var(--mono); letter-spacing: .08em; color: var(--line-2); border: 1px dashed var(--line); border-radius: 10px; }
 .column.over { background: color-mix(in srgb, var(--c) 7%, transparent); outline: 1px dashed var(--c); outline-offset: 6px; }
 
@@ -218,6 +229,8 @@ h1 { margin: 0; max-width: 22ch; font: 600 clamp(30px, 4.2vw, 56px)/1.04 var(--d
 .activity h2 { display: flex; align-items: baseline; gap: 10px; margin: 0 0 16px; padding-bottom: 11px; border-bottom: 1px solid var(--line); font: 600 12px var(--display); letter-spacing: .2em; text-transform: uppercase; color: var(--dim); }
 .activity h2 span { margin-left: auto; font: 500 11px var(--mono); letter-spacing: .08em; color: var(--faint); }
 .activity ol, .history ol { list-style: none; margin: 0; padding: 0; }
+/* Below the board (narrower windows) the activity list scrolls in its own box too. */
+@media (max-width: 1319px) { .activity ol { max-height: 460px; overflow-y: auto; overscroll-behavior: contain; scrollbar-width: thin; scrollbar-color: var(--line-2) transparent; padding-top: 4px; } }
 .event { --c: var(--line-2); position: relative; padding: 0 0 16px 22px; font-size: 12.5px; color: var(--dim); overflow-wrap: anywhere; }
 .event[data-task] { cursor: pointer; }
 .event::before { content: ''; position: absolute; left: 0; top: 6px; width: 7px; height: 7px; border-radius: 50%; background: var(--bg); border: 1px solid var(--c); z-index: 1; }
@@ -295,7 +308,7 @@ textarea { resize: vertical; }
   .strip { opacity: 1; }
   .board { grid-template-columns: minmax(0, 1fr); gap: 22px; }
   .column.doing { order: 1; } .column.blocked { order: 2; } .column.todo { order: 3; } .column.done { order: 4; }
-  .stack { min-height: 0; }
+  .stack { min-height: 0; max-height: min(560px, 70vh); }
   .column:has(.stack:empty) { display: none; }
   .focus { flex-direction: column; align-items: flex-start; gap: 12px; padding: 16px 16px 16px 20px; }
   .focus-side { flex-direction: row; align-items: baseline; gap: 12px; }

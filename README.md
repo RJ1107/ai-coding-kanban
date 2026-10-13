@@ -30,6 +30,7 @@ For agents that support native skills, install the whole folder through their su
 | --- | --- |
 | Four columns | Up next, In progress, Done and Blocked |
 | Live motion | A card flies to its new column when the agent reports. No refresh, no polling by the page |
+| Scrolling columns | Each column scrolls in its own box, four to five cards tall, so a long Done list never pushes the activity off the page. Finished work is listed newest first |
 | Progress ring | One arc per card, in plan order. Click an arc to open that card |
 | Time in status | Every card and the focus strip show how long the work has been in its current state |
 | Evidence on the card | Done cards show their verification text. A card marked done without evidence says so |

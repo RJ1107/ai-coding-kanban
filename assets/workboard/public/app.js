@@ -101,6 +101,8 @@ function renderBoard(tasks, animate) {
   const alive = new Set();
   for (const status of statuses) {
     const group = tasks.filter(task => task.status === status), stack = $('stack-' + status);
+    // Finished work is listed newest first, so the card that just landed is at the top of its scroll box.
+    if (status === 'done') group.sort((a, b) => (b.statusAt || b.updatedAt).localeCompare(a.statusAt || a.updatedAt));
     $('count-' + status).textContent = pad(group.length);
     group.forEach((task, i) => {
       alive.add(task.id);
@@ -128,15 +130,28 @@ function renderBoard(tasks, animate) {
       el.addEventListener('animationend', () => el.classList.remove('enter'), {once: true});
       return;
     }
-    if (moved) comet(index, tasks.length);
+    if (moved) { comet(index, tasks.length); reveal(el); }
     if (still.matches) return;
     const now = el.getBoundingClientRect(), dx = was.left - now.left, dy = was.top - now.top;
     if (Math.abs(dx) + Math.abs(dy) < 2) { if (moved) land(el); return; }
-    el.classList.toggle('flying', moved);
-    el.animate([{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'translate(0, 0)'}], {duration: moved ? 900 : 450, easing: 'cubic-bezier(.22,1,.36,1)'})
-      .onfinish = () => { el.classList.remove('flying'); if (moved) land(el); };
+    const motion = [{transform: `translate(${dx}px, ${dy}px)`}, {transform: 'translate(0, 0)'}];
+    if (!moved) { el.animate(motion, {duration: 450, easing: 'cubic-bezier(.22,1,.36,1)'}); return; }
+    // Columns clip what is inside them, so the flight is made by a copy pinned above the page.
+    const ghost = el.cloneNode(true);
+    ghost.classList.add('ghost', 'flying'); ghost.removeAttribute('data-task'); ghost.setAttribute('aria-hidden', 'true');
+    Object.assign(ghost.style, {left: now.left + 'px', top: now.top + 'px', width: now.width + 'px', height: now.height + 'px'});
+    document.body.append(ghost); el.classList.add('away');
+    ghost.animate(motion, {duration: 900, easing: 'cubic-bezier(.22,1,.36,1)'}).onfinish = () => { ghost.remove(); el.classList.remove('away'); land(el); };
   });
+  for (const stack of document.querySelectorAll('.stack')) hint(stack);
 }
+// Scrolls a column's own box, not the page, until the card is inside it.
+function reveal(el) {
+  const stack = el.parentElement;
+  if (el.offsetTop < stack.scrollTop) stack.scrollTop = el.offsetTop - 4;
+  else if (el.offsetTop + el.offsetHeight > stack.scrollTop + stack.clientHeight) stack.scrollTop = el.offsetTop + el.offsetHeight - stack.clientHeight + 10;
+}
+const hint = stack => stack.classList.toggle('more', stack.scrollHeight - stack.scrollTop - stack.clientHeight > 6);
 
 function favicon(color) {
   $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#05070b"/><circle cx="16" cy="16" r="9" fill="none" stroke="${color}" stroke-width="4"/></svg>`);
@@ -335,6 +350,7 @@ async function start() {
 document.addEventListener('visibilitychange', () => { if (!document.hidden) load().catch(() => {}); });
 addEventListener('online', () => load().catch(() => {}));
 
+$('board').addEventListener('scroll', e => e.target.classList?.contains('stack') && hint(e.target), true);
 $('board').innerHTML = statuses.map(s => `<section class="column ${s}" data-status="${s}" aria-label="${names[s]}"><header><i></i><h2>${names[s]}</h2><span class="count" id="count-${s}">00</span></header><div class="stack" id="stack-${s}"></div></section>`).join('');
 buildOrbit();
 render();
