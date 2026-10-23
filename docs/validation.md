@@ -8,6 +8,10 @@ Checked on a live board carrying four projects: the toggle switches the chrome a
 
 Board-to-board discovery was checked with two real boards, FinMate on 4318 and the desktop-pet workspace on 4319: each lists the other's projects as `port · title`, selecting one opens that board at that project, and a board left alone simply shows no group. The probe runs server side over loopback, so no browser origin is involved and nothing is written to disk; a stopped board disappears from the list within twenty seconds. Not covered: boards outside the forty ports from the configured base, and any machine but this one.
 
+## 2.3.0: archiving and idle boards
+
+Archiving was checked on a live board: the project leaves the local list and the peer list, its cards and history stay in `data/board.json`, `summary` still renders it, and `unarchive` restores it unchanged. Idle shutdown was measured with `BOARD_IDLE_MINUTES` set low: with no viewer attached the server exited on its own, removed its own marker, and the port stopped answering; a later `manage.mjs start` served the same data. Each board process measured 113–128 MB resident while its data file was 45–158 KB, which is what the shutdown is for. Not covered: whether four hours is the right default for anyone else, and a board whose viewer tab is left open indefinitely, which by design never goes idle.
+
 ## Automated runtime checks
 
 `node --test scripts/check.mjs` passes six groups:

@@ -174,8 +174,10 @@ function connection() {
 
 function render() {
   connection();
-  const project = state.projects.find(p => p.id === selectedProject) || state.projects[0];
-  if (state.projects.length) selectedProject = project.id;
+  // Archived work stays reachable by its own link, and is otherwise out of the way.
+  const live = state.projects.filter(p => !p.archivedAt);
+  const project = state.projects.find(p => p.id === selectedProject) || live[0] || state.projects[0];
+  if (project) selectedProject = project.id;
   const switched = renderedProject !== selectedProject;
   if (switched) {
     for (const el of cards.values()) el.remove();
@@ -186,13 +188,18 @@ function render() {
   const by = status => tasks.filter(task => task.status === status);
   const done = by('done').length, blocked = by('blocked'), doing = by('doing').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  const here = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(say(p, 'title'))}</option>`).join('');
+  const listed = live.concat(project?.archivedAt ? [project] : []);
+  const here = listed.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(say(p, 'title'))}${p.archivedAt ? ` · ${t('archived')}` : ''}</option>`).join('');
   // Every workspace runs its own board on its own port; listing them here is the only way
   // to move between them without remembering which port belongs to which project.
-  const elsewhere = peers.flatMap(peer => peer.projects.map(project =>
-    `<option value="go:${peer.port}:${esc(project.id)}">${peer.port} · ${esc(say(project, 'title'))}</option>`));
-  $('project').innerHTML = here
-    + (elsewhere.length ? `<optgroup label="${esc(t('other_boards'))}">${elsewhere.join('')}</optgroup>` : '')
+  // One group per board, so the port is read once instead of on every line.
+  const elsewhere = peers.map(peer => {
+    const options = peer.projects.map(project =>
+      `<option value="go:${peer.port}:${esc(project.id)}">${esc(say(project, 'title'))}</option>`).join('');
+    const name = peer.label ? `${peer.port} · ${esc(peer.label)}` : String(peer.port);
+    return options ? `<optgroup label="${name}">${options}</optgroup>` : '';
+  }).join('');
+  $('project').innerHTML = here + elsewhere
     + `<option value="">${esc(t('new_project_option'))}</option>`;
   $('strip').innerHTML = tasks.map(task => `<i class="${task.status}"></i>`).join('');
   $('kicker').textContent = project ? `${t('project')} · ${project.id}` : t('workboard');

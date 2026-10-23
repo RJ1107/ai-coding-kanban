@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 
 export const root = path.dirname(fileURLToPath(import.meta.url));
 export const dataFile = path.resolve(process.env.BOARD_DATA || path.join(root, 'data', 'board.json'));
-export const version = '2.2.0';
+export const version = '2.3.0';
 export const statuses = ['todo', 'doing', 'done', 'blocked'];
 const empty = () => ({schema: 1, revision: 0, projects: [], tasks: [], events: [], updatedAt: null});
 export function readState() {
@@ -66,7 +66,17 @@ export function apply(state, command) {
       event = {kind: 'note', title: 'Project update', titleZh: '项目备注',
                note: str(command.note, 'note'), noteZh: optional(command.noteZh ?? '', 'noteZh')};
       result = projectId;
-    } else throw new Error('type must be project, task, or note.');
+    } else if (command.type === 'archive') {
+      // A soft delete: finished work leaves the lists but keeps its cards, its history and
+      // its handoff. Nothing is removed from disk, and unarchive puts it back untouched.
+      const archived = command.archived === false || command.archived === 'false' ? null : now;
+      if (project.archivedAt === archived) return {changed: false, result: projectId};
+      project.archivedAt = archived;
+      project.updatedAt = now;
+      event = {kind: 'archive', title: project.title, titleZh: project.titleZh || '',
+               note: archived ? 'Archived' : 'Restored', noteZh: archived ? '已归档' : '已恢复'};
+      result = projectId;
+    } else throw new Error('type must be project, task, note, or archive.');
     project.updatedAt = now;
   }
   state.revision += 1;

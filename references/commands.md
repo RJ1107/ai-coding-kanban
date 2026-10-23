@@ -16,6 +16,8 @@ node .agent-workboard/board.mjs show
 
 `task` creates a new card or updates only supplied fields on an existing card. IDs are scoped to a project. Statuses are `todo`, `doing`, `done`, `blocked`. `actor` identifies who reported the change; `owner` identifies who is responsible for the card. Manual UI actions record actor `You`.
 
+`archive` hides a finished project from the board and from other boards' lists while keeping its cards, history and handoff: `node .agent-workboard/board.mjs archive --project feature-a`. `unarchive` restores it. A project you are looking at stays visible, marked as archived, so an existing link still works. Nothing is removed from `data/board.json`.
+
 `summary` prints a Markdown handoff: progress counts, then In progress, Blocked, Up next and Done with each card's owner, latest note and evidence, then recent project notes. Run it first when taking over. Without `--project` it summarizes the first project. `show` prints the raw JSON state. Each card also stores `statusAt`, the time it entered its current status; the viewer uses it for elapsed time.
 
 For safe multiline input, create a UTF-8 JSON file:

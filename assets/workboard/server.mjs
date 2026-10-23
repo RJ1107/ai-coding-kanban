@@ -8,6 +8,11 @@ const port = Number(process.env.BOARD_PORT || 4318);
 const token = randomBytes(24).toString('hex');
 const workspaceId = createHash('sha256').update(process.platform === 'win32' ? dataFile.toLowerCase() : dataFile).digest('hex').slice(0,20);
 const clients = new Set();
+// A board costs a Node process whether or not anyone is reading it. With no viewer
+// attached and no writes for this long, it stops itself; the data is on disk and
+// `manage.mjs start` brings it back. Set BOARD_IDLE_MINUTES=0 to keep it running.
+const idleMinutes = Number(process.env.BOARD_IDLE_MINUTES ?? 240);
+let lastRequest = Date.now();
 // The workspace folder, two levels above .agent-workboard/data/board.json.
 const label = path.basename(path.dirname(path.dirname(path.dirname(dataFile)))) || 'workboard';
 let state = readState();
@@ -35,6 +40,7 @@ const server = http.createServer(async (req, res) => {
   const origin = req.headers.origin;
   if (origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(origin)) return json(res, 403, {error: 'Cross-origin access denied.'});
   // Board-to-board discovery runs server side, so these two reads carry no browser origin.
+  lastRequest = Date.now();
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   try {
     if (req.method === 'GET' && url.pathname === '/api/health') {
@@ -65,7 +71,7 @@ const server = http.createServer(async (req, res) => {
     // A short, public list so another board can name this one's work without its whole state.
     if (req.method === 'GET' && url.pathname === '/api/projects') {
       refresh();
-      return json(res, 200, state.projects.map(project => ({
+      return json(res, 200, state.projects.filter(project => !project.archivedAt).map(project => ({
         id: project.id, title: project.title, titleZh: project.titleZh || '',
         done: state.tasks.filter(t => t.projectId === project.id && t.status === 'done').length,
         total: state.tasks.filter(t => t.projectId === project.id).length,
@@ -106,8 +112,27 @@ const server = http.createServer(async (req, res) => {
   } catch (error) { json(res, 400, {error: error.message}); }
 });
 const poll = setInterval(refresh, 500);
+const marker = path.join(root, 'data', 'server.json');
+const idle = setInterval(() => {
+  if (!idleMinutes || clients.size) return;
+  // A reporting command writes the file directly without touching this server, so the
+  // file's own timestamp counts as activity too.
+  let written = 0;
+  try { written = fs.statSync(dataFile).mtimeMs; } catch { /* no board file yet */ }
+  if (Date.now() - Math.max(lastRequest, written) < idleMinutes * 60000) return;
+  console.log(`Idle for ${idleMinutes} minutes with no viewer attached; stopping.`);
+  stop();
+}, 60000);
 const heartbeat = setInterval(() => { for (const client of clients) client.write(': heartbeat\n\n'); }, 15000);
 server.on('error', error => { console.error(error.code === 'EADDRINUSE' ? `Port ${port} is already in use. Open the existing board or set BOARD_PORT.` : error.message); process.exit(1); });
 server.listen(port, '127.0.0.1', () => console.log(`Agent Workboard: http://127.0.0.1:${port}`));
-function stop() { clearInterval(poll); clearInterval(heartbeat); for (const client of clients) client.end(); server.close(() => process.exit(0)); }
+function stop() {
+  clearInterval(poll); clearInterval(heartbeat); clearInterval(idle);
+  // Leave no marker claiming a port this process no longer holds.
+  try {
+    if (JSON.parse(fs.readFileSync(marker, 'utf8')).pid === process.pid) fs.unlinkSync(marker);
+  } catch { /* no marker, or it belongs to someone else */ }
+  for (const client of clients) client.end();
+  server.close(() => process.exit(0));
+}
 process.on('SIGINT', stop); process.on('SIGTERM', stop);
