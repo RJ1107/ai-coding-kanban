@@ -12,6 +12,8 @@ node .agent-workboard/board.mjs summary --project feature-a
 node .agent-workboard/board.mjs show
 ```
 
+`--title-zh`, `--note-zh` and `--evidence-zh` (and `--title-zh`, `--goal-zh` on a project) carry a second language for the same card; in an `apply` file they are `titleZh`, `noteZh`, `evidenceZh` and `goalZh`. The viewer shows whichever language is selected and falls back to the other, so a card written in one language reads correctly in both. `summary --lang zh` returns the Chinese handoff; the default stays English.
+
 `task` creates a new card or updates only supplied fields on an existing card. IDs are scoped to a project. Statuses are `todo`, `doing`, `done`, `blocked`. `actor` identifies who reported the change; `owner` identifies who is responsible for the card. Manual UI actions record actor `You`.
 
 `summary` prints a Markdown handoff: progress counts, then In progress, Blocked, Up next and Done with each card's owner, latest note and evidence, then recent project notes. Run it first when taking over. Without `--project` it summarizes the first project. `show` prints the raw JSON state. Each card also stores `statusAt`, the time it entered its current status; the viewer uses it for elapsed time.

@@ -1,6 +1,6 @@
 ---
 name: live-coding-kanban
-description: Show and maintain a real-time English Kanban beside a coding agent, with persistent tasks, evidence and cross-agent handoffs. Use when the user wants visible progress during implementation.
+description: Show and maintain a real-time Kanban beside a coding agent, in English or Chinese, with persistent tasks, evidence and cross-agent handoffs. Use when the user wants visible progress during implementation.
 ---
 
 # Live Coding Kanban
@@ -19,7 +19,7 @@ node scripts/setup.mjs --workspace "/path/to/project" --project "task-id" --titl
 Setup copies a dependency-free runtime into `.agent-workboard/`, preserves existing board data, adds scoped progress instructions to `AGENTS.md`, `CLAUDE.md` and `WORKBOARD.md`, and starts a loopback viewer. It preserves existing instructions and backs up modified files. Use `--no-connect` if the user wants a one-session board without project instruction changes. Read the returned `boardTool` and `url`; the port may differ from the default when another program is already using it. Running setup again after the skill is updated upgrades the runtime, keeps the cards and restarts only this workspace's viewer.
 
 3. Open the returned URL where the user can see it: the built-in browser or preview pane of a desktop coding app, an editor's side browser, or a clickable local link in a terminal. Use an available preview or forwarding mechanism for a remote executor; do not imply its loopback address opens on the user's device. If no preview is available, say so and keep the task state updated.
-4. Create a short, useful plan, normally 3–8 cards, using the reporting command below. Choose stable IDs and English titles that describe outcomes. On continuation or handoff, read the current state first with `node .agent-workboard/board.mjs summary --project task-id` and reuse the existing project and card IDs.
+4. Create a short, useful plan, normally 3–8 cards, using the reporting command below. Choose stable IDs and titles that describe outcomes. Write them in English unless the user asks to read the board in Chinese, in which case write both (see below). On continuation or handoff, read the current state first with `node .agent-workboard/board.mjs summary --project task-id` and reuse the existing project and card IDs.
 
 ## Update during real work
 
@@ -40,6 +40,13 @@ For multiline text or batches, write a UTF-8 JSON file and use `node .agent-work
 - This works with agents that can read files and run local commands. Native skill discovery is optional; a user can explicitly ask any such agent to read `SKILL.md`. Agents without file/shell access cannot maintain this runtime.
 - Status is reported by the assistant, not inferred from private reasoning or guaranteed by an official vendor event stream. Never claim a new agent has been tested unless it actually ran the workflow. The `LIVE` indicator describes the board service, not whether a model is generating.
 - Do not invent progress, tests, time savings or completion percentages. Keep state and evidence free of credentials and private transcripts. Use fictional data for public showcases and label it.
-- Keep the UI and cards in English. The viewer supports manual edits, drag and drop, conflict detection, evidence, per-card history, a copyable handoff summary and a one-column layout for narrow side panels.
+- **Two languages.** The viewer has a language toggle and starts in Chinese for a Chinese browser. It translates its own wording on its own; the text *you* write is translated only if you write it twice. When the user wants a Chinese board, pass the Chinese copy alongside the English one and leave names such as Claude, a file path or an identifier untranslated:
+
+```text
+node .agent-workboard/board.mjs task --project task-id --id inspect   --title "Check the current behavior" --title-zh "检查当前行为"   --note "Starting the app" --note-zh "正在启动应用" --actor "Your assistant name"
+```
+
+  The fields are `--title-zh`, `--note-zh`, `--evidence-zh` on a task and `--title-zh`, `--goal-zh` on a project (`titleZh`, `noteZh`, `evidenceZh`, `goalZh` in an `apply` file). A card without them reads the same as before in either language. `summary --lang zh` returns the Chinese handoff.
+- The viewer supports manual edits, drag and drop, conflict detection, evidence, per-card history, a copyable handoff summary and a one-column layout for narrow side panels.
 
 Leave the viewer running when handing it to the user. After a machine restart, resume it with `node .agent-workboard/manage.mjs start`. On request, stop only this project's owned server with `node .agent-workboard/manage.mjs stop`; saved tasks remain.

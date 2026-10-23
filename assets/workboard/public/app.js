@@ -1,8 +1,9 @@
 import {createField} from './field.js';
+import {applyStatic, lang, locale, setLang, t} from './i18n.js';
 
 const $ = id => document.getElementById(id);
 const statuses = ['todo', 'doing', 'done', 'blocked'];
-const names = {todo: 'Up next', doing: 'In progress', done: 'Done', blocked: 'Blocked'};
+const names = {todo: t('todo'), doing: t('doing'), done: t('done'), blocked: t('blocked')};
 const colors = {todo: '#7f8ca0', doing: '#59c8ff', done: '#4df0b4', blocked: '#ff6f4d'};
 const still = matchMedia('(prefers-reduced-motion: reduce)');
 const field = createField($('field'));
@@ -16,15 +17,18 @@ const seenStatus = new Map(); // task id -> status at the previous render
 const seenEvents = new Set();
 let cometAngle = 0, shownDone = null, shownFocus = null;
 
+/* The assistant may write a card twice, once per language. Picking here, with a fallback
+   to the original, means a board that only ever carried one language still reads fine. */
+const say = (record, field) => (lang() === 'zh' && record?.[field + 'Zh']) || record?.[field] || '';
 const esc = value => String(value ?? '').replace(/[&<>"']/g, c => ({'&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'}[c]));
 const pad = n => String(n).padStart(2, '0');
-const clock = value => new Date(value).toLocaleTimeString('en-US', {hour: '2-digit', minute: '2-digit', hour12: false});
-const fullTime = value => new Date(value).toLocaleString('en-US');
+const clock = value => new Date(value).toLocaleTimeString(locale(), {hour: '2-digit', minute: '2-digit', hour12: false});
+const fullTime = value => new Date(value).toLocaleString(locale());
 function age(since, precise) {
   const s = Math.max(0, Math.floor((Date.now() - new Date(since)) / 1000));
   const h = Math.floor(s / 3600), m = Math.floor(s % 3600 / 60);
   if (precise) return `${h ? pad(h) + ':' : ''}${pad(m)}:${pad(s % 60)}`;
-  return h ? `${h}h ${pad(m)}m` : m ? `${m}m` : `${s}s`;
+  return h ? t('hours_minutes', h, pad(m)) : m ? t('minutes', m) : t('seconds', s % 60);
 }
 const known = {'You': 'a0', 'Claude Code': 'a1', 'Codex': 'a2'};
 const agentClass = name => known[name] || 'a' + (3 + [...String(name)].reduce((sum, c) => sum + c.charCodeAt(0), 0) % 4);
@@ -36,14 +40,16 @@ function replay(el, name) { el.classList.remove(name); void el.getBoundingClient
 function toast(message) { $('toast').textContent = message; $('toast').hidden = false; clearTimeout(toast.timer); toast.timer = setTimeout(() => $('toast').hidden = true, 4200); }
 
 function eventLine(e) {
-  const who = `<b>${esc(e.actor)}</b>`, what = `<em>${esc(e.title)}</em>`;
-  if (e.kind === 'create') return `${who} added ${what}`;
-  if (e.kind === 'update') return e.from !== e.to ? `${who} moved ${what}<span class="route">${names[e.from]} → ${names[e.to]}</span>` : `${who} updated ${what}`;
-  if (e.kind === 'project') return `${who} set up the project`;
-  return `${who} left a project note`;
+  const who = `<b>${esc(e.actor)}</b>`, what = `<em>${esc(say(e, 'title'))}</em>`;
+  if (e.kind === 'create') return t('added', who, what);
+  if (e.kind === 'update') {
+    return e.from !== e.to ? t('moved', who, what, names[e.from], names[e.to]) : t('updated', who, what);
+  }
+  if (e.kind === 'project') return t('set_up', who);
+  return t('left_note', who);
 }
 function eventItem(e, fresh) {
-  const detail = e.to === 'done' && e.evidence ? e.evidence : e.note;
+  const detail = e.to === 'done' && say(e, 'evidence') ? say(e, 'evidence') : say(e, 'note');
   return `<li class="event ${e.kind === 'create' ? 'todo' : e.to || ''}${fresh ? ' fresh' : ''}"${e.taskId ? ` data-task="${esc(e.taskId)}"` : ''}><time datetime="${esc(e.at)}" title="${esc(fullTime(e.at))}">${clock(e.at)}</time><p>${eventLine(e)}</p>${detail ? `<p class="detail">${esc(detail)}</p>` : ''}</li>`;
 }
 
@@ -64,7 +70,7 @@ function renderOrbit(tasks, draw) {
   if (draw) $('segments').querySelectorAll('.draw').forEach((el, i) => el.style.setProperty('--i', i));
   const done = tasks.filter(task => task.status === 'done').length;
   $('orbit-count').textContent = tasks.length ? pad(done) : '—';
-  $('orbit-of').textContent = tasks.length ? `OF ${pad(tasks.length)} DONE` : 'NO TASKS YET';
+  $('orbit-of').textContent = tasks.length ? t('of_done', pad(tasks.length)) : t('no_tasks');
   $('ghost').textContent = tasks.length ? `${pad(done)}/${pad(tasks.length)}` : '';
   if (shownDone !== null && shownDone !== done) replay($('orbit-count'), 'tick');
   shownDone = done;
@@ -84,10 +90,12 @@ function comet(index, total) {
 }
 
 function cardMarkup(task) {
+  const evidence = say(task, 'evidence'), note = say(task, 'note');
   const proof = task.status === 'done'
-    ? task.evidence ? `<p class="proof"><b>Evidence</b>${esc(task.evidence)}</p>` : '<p class="proof missing">Marked done without evidence</p>'
-    : task.note ? `<p class="note">${esc(task.note)}</p>` : '';
-  return `<span class="card-top"><span>${esc(task.id)}</span><span class="age" data-since="${esc(task.statusAt || task.updatedAt)}">${age(task.statusAt || task.updatedAt)}</span></span><h3>${esc(task.title)}</h3>${proof}<span class="card-foot"><span class="mono ${agentClass(task.owner)}">${esc(monogram(task.owner))}</span>${esc(task.owner)}${task.evidence && task.status !== 'done' ? '<span class="tag">EVIDENCE</span>' : ''}</span>`;
+    ? evidence ? `<p class="proof"><b>${esc(t('evidence_tag'))}</b>${esc(evidence)}</p>`
+      : `<p class="proof missing">${esc(t('no_evidence'))}</p>`
+    : note ? `<p class="note">${esc(note)}</p>` : '';
+  return `<span class="card-top"><span>${esc(task.id)}</span><span class="age" data-since="${esc(task.statusAt || task.updatedAt)}">${age(task.statusAt || task.updatedAt)}</span></span><h3>${esc(say(task, 'title'))}</h3>${proof}<span class="card-foot"><span class="mono ${agentClass(task.owner)}">${esc(monogram(task.owner))}</span>${esc(task.owner)}${evidence && task.status !== 'done' ? `<span class="tag">${esc(t('evidence_tag'))}</span>` : ''}</span>`;
 }
 function land(el) {
   replay(el, 'landed');
@@ -157,9 +165,9 @@ function favicon(color) {
   $('favicon').href = 'data:image/svg+xml,' + encodeURIComponent(`<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32"><rect width="32" height="32" rx="7" fill="#05070b"/><circle cx="16" cy="16" r="9" fill="none" stroke="${color}" stroke-width="4"/></svg>`);
 }
 function connection() {
-  $('connection').textContent = connected ? 'LIVE' : 'RECONNECTING';
+  $('connection').textContent = connected ? t('live') : t('reconnecting');
   $('connection').classList.toggle('offline', !connected);
-  $('connection').title = connected ? 'Connected to the local board service' : 'Showing the last known state while disconnected.';
+  $('connection').title = connected ? t('connected_title') : t('offline_title');
   document.body.classList.toggle('live', connected);
 }
 
@@ -177,18 +185,18 @@ function render() {
   const by = status => tasks.filter(task => task.status === status);
   const done = by('done').length, blocked = by('blocked'), doing = by('doing').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  $('project').innerHTML = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(p.title)}</option>`).join('') + '<option value="">+ New project</option>';
+  $('project').innerHTML = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(say(p, 'title'))}</option>`).join('') + `<option value="">${esc(t('new_project_option'))}</option>`;
   $('strip').innerHTML = tasks.map(task => `<i class="${task.status}"></i>`).join('');
-  $('kicker').textContent = project ? `Project · ${project.id}` : 'Workboard';
-  $('title').textContent = project?.title || 'No project yet';
-  $('goal').textContent = project?.goal || (project ? '' : 'Your assistant creates the plan after understanding the goal, then keeps every card up to date while it works.');
-  document.title = `${blocked.length ? '⚠ ' : ''}${tasks.length ? `${done}/${tasks.length} · ` : ''}${project?.title || 'Workboard'}`;
+  $('kicker').textContent = project ? `${t('project')} · ${project.id}` : t('workboard');
+  $('title').textContent = say(project, 'title') || t('no_project');
+  $('goal').textContent = say(project, 'goal') || (project ? '' : t('empty_goal'));
+  document.title = `${blocked.length ? '⚠ ' : ''}${tasks.length ? `${done}/${tasks.length} · ` : ''}${say(project, 'title') || t('workboard')}`;
   favicon(blocked.length ? colors.blocked : doing.length ? colors.doing : tasks.length && done === tasks.length ? colors.done : colors.todo);
 
   const owners = [...new Set(tasks.map(task => task.owner))];
   $('agents').innerHTML = owners.map(owner => {
     const mine = tasks.filter(task => task.owner === owner), finished = mine.filter(task => task.status === 'done').length;
-    return `<button class="agent ${agentClass(owner)}${ownerFilter === owner ? ' on' : ''}" data-owner="${esc(owner)}" aria-pressed="${ownerFilter === owner}" title="Highlight this owner's cards"><span class="mono ${agentClass(owner)}">${esc(monogram(owner))}</span>${esc(owner)}<small>${finished}/${mine.length}</small></button>`;
+    return `<button class="agent ${agentClass(owner)}${ownerFilter === owner ? ' on' : ''}" data-owner="${esc(owner)}" aria-pressed="${ownerFilter === owner}" title="${esc(t('highlight_owner'))}"><span class="mono ${agentClass(owner)}">${esc(monogram(owner))}</span>${esc(owner)}<small>${finished}/${mine.length}</small></button>`;
   }).join('');
 
   renderOrbit(tasks, switched);
@@ -197,20 +205,25 @@ function render() {
   const mode = doing[0] ? 'doing' : blocked[0] ? 'blocked' : complete ? 'done' : 'idle';
   $('focus').className = 'focus ' + mode;
   $('focus').dataset.task = focus?.id || '';
-  $('focus-label').textContent = {doing: doing.length > 1 ? `WORKING ON NOW · ${doing.length} ACTIVE` : 'WORKING ON NOW', blocked: 'BLOCKED · NEEDS INPUT', done: 'PLAN COMPLETE', idle: 'STANDING BY'}[mode];
-  $('focus-title').textContent = focus?.title || (complete ? 'Every card is done' : 'No task is in progress');
-  $('focus-note').textContent = focus?.note || (complete ? 'Open the cards to review results and verification.' : 'This updates the moment your assistant starts a card.');
+  $('focus-label').textContent = {
+    doing: doing.length > 1 ? t('working_now_n', doing.length) : t('working_now'),
+    blocked: t('needs_input'), done: t('plan_complete'), idle: t('standing_by'),
+  }[mode];
+  $('focus-title').textContent = say(focus, 'title') || (complete ? t('all_done') : t('nothing_running'));
+  $('focus-note').textContent = say(focus, 'note') || (complete ? t('review_hint') : t('start_hint'));
   $('focus-clock').textContent = focus ? age(focus.statusAt || focus.updatedAt, true) : '';
   if (focus) Object.assign($('focus-clock').dataset, {since: focus.statusAt || focus.updatedAt, precise: '1'}); else delete $('focus-clock').dataset.since;
-  $('focus-meta').innerHTML = focus ? `${esc(focus.owner)} · updated <span data-since="${esc(focus.updatedAt)}">${age(focus.updatedAt)}</span> ago` : '';
-  const focusKey = `${mode}/${focus?.id}/${focus?.note}`;
+  $('focus-meta').innerHTML = focus
+    ? t('updated_ago', esc(focus.owner), `<span data-since="${esc(focus.updatedAt)}">${age(focus.updatedAt)}</span>`)
+    : '';
+  const focusKey = `${mode}/${focus?.id}/${say(focus, 'note')}`;
   if (shownFocus !== null && shownFocus !== focusKey) replay($('focus').querySelector('.focus-main'), 'swap');
   shownFocus = focusKey;
 
   renderBoard(tasks, booted && !switched);
 
   const events = state.events.filter(e => e.projectId === selectedProject).slice(0, 40);
-  $('events').innerHTML = events.length ? events.map(e => eventItem(e, booted && !switched && !seenEvents.has(e.id))).join('') : '<li class="empty">Changes will appear here as they happen.</li>';
+  $('events').innerHTML = events.length ? events.map(e => eventItem(e, booted && !switched && !seenEvents.has(e.id))).join('') : `<li class="empty">${esc(t('no_events'))}</li>`;
   events.forEach(e => seenEvents.add(e.id));
   $('revision').textContent = `r${state.revision || 0}`;
 
@@ -230,27 +243,27 @@ async function send(command) {
 }
 function renderHistory() {
   const events = state.events.filter(e => e.taskId === selectedTask && e.projectId === selectedProject).slice(0, 30);
-  $('task-history').innerHTML = events.map(e => eventItem({...e, taskId: null}, false)).join('') || '<li class="empty">No recorded changes yet.</li>';
+  $('task-history').innerHTML = events.map(e => eventItem({...e, taskId: null}, false)).join('') || `<li class="empty">${esc(t('no_history'))}</li>`;
 }
 function openTask(id) {
   const task = state.tasks.find(task => task.id === id && task.projectId === selectedProject);
   if (!task) return;
   selectedTask = id; selectedUpdatedAt = task.updatedAt;
-  $('detail-id').textContent = `${task.id} · updated ${fullTime(task.updatedAt)}`;
+  $('detail-id').textContent = t('detail_id', task.id, fullTime(task.updatedAt));
   $('detail-stale').hidden = true;
-  $('detail-title').value = task.title;
+  $('detail-title').value = say(task, 'title');
   $('detail-owner').value = task.owner;
   $('detail-status').innerHTML = statuses.map(s => `<label class="${s}"><input type="radio" name="status" value="${s}"${s === task.status ? ' checked' : ''}><span>${names[s]}</span></label>`).join('');
-  $('detail-note').value = task.note;
-  $('detail-evidence').value = task.evidence;
+  $('detail-note').value = say(task, 'note');
+  $('detail-evidence').value = say(task, 'evidence');
   renderHistory();
   $('detail').showModal();
 }
 function openCreate(type) {
-  if (type === 'task' && !state.projects.some(p => p.id === selectedProject)) return toast('Create a project first');
+  if (type === 'task' && !state.projects.some(p => p.id === selectedProject)) return toast(t('need_project'));
   createType = type;
-  $('create-heading').textContent = type === 'project' ? 'New project' : 'Add task';
-  $('create-note-label').textContent = type === 'project' ? 'Project goal' : 'First step or context';
+  $('create-heading').textContent = type === 'project' ? t('new_project') : t('add_task');
+  $('create-note-label').textContent = type === 'project' ? t('project_goal') : t('first_step');
   $('create-form').reset();
   $('create').showModal();
 }
@@ -271,21 +284,28 @@ $('project').onchange = e => {
   selectedProject = e.target.value; localStorage.setItem('workboard-project', selectedProject); render();
 };
 $('new-task').onclick = () => openCreate('task');
+$('lang').onclick = () => setLang(lang() === 'zh' ? 'en' : 'zh');
 $('handoff').onclick = async () => {
   try {
-    const res = await fetch('/api/summary?project=' + encodeURIComponent(selectedProject || ''));
+    const res = await fetch(`/api/summary?project=${encodeURIComponent(selectedProject || '')}&lang=${lang()}`);
     const text = await res.text();
     if (!res.ok) throw new Error(JSON.parse(text).error);
     await navigator.clipboard.writeText(text);
-    toast('Handoff summary copied as Markdown');
-  } catch (error) { toast(error.message || 'Could not copy the summary'); }
+    toast(t('copied'));
+  } catch (error) { toast(error.message || t('copy_failed')); }
 };
 $('detail-form').onsubmit = async e => {
   e.preventDefault();
   const submit = e.submitter; submit.disabled = true;
   try {
-    await send({type: 'task', project: selectedProject, id: selectedTask, expectedUpdatedAt: selectedUpdatedAt, title: $('detail-title').value, owner: $('detail-owner').value, status: new FormData(e.target).get('status'), note: $('detail-note').value, evidence: $('detail-evidence').value});
-    $('detail').close(); toast('Changes saved');
+    // Editing in Chinese writes the Chinese copy, so the other language keeps what it had.
+    const suffix = lang() === 'zh' ? 'Zh' : '';
+    await send({type: 'task', project: selectedProject, id: selectedTask,
+      expectedUpdatedAt: selectedUpdatedAt, owner: $('detail-owner').value,
+      status: new FormData(e.target).get('status'),
+      ['title' + suffix]: $('detail-title').value, ['note' + suffix]: $('detail-note').value,
+      ['evidence' + suffix]: $('detail-evidence').value});
+    $('detail').close(); toast(t('saved'));
   } catch (error) { toast(error.message); } finally { submit.disabled = false; }
 };
 $('create-form').onsubmit = async e => {
@@ -331,7 +351,7 @@ addEventListener('scroll', () => {
 
 async function load() {
   const res = await fetch('/api/state');
-  if (!res.ok) throw new Error('Board unavailable');
+  if (!res.ok) throw new Error(t('unavailable'));
   const value = await res.json();
   state = value.state; token = value.token;
   render();
@@ -351,6 +371,7 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 addEventListener('online', () => load().catch(() => {}));
 
 $('board').addEventListener('scroll', e => e.target.classList?.contains('stack') && hint(e.target), true);
+applyStatic();
 $('board').innerHTML = statuses.map(s => `<section class="column ${s}" data-status="${s}" aria-label="${names[s]}"><header><i></i><h2>${names[s]}</h2><span class="count" id="count-${s}">00</span></header><div class="stack" id="stack-${s}"></div></section>`).join('');
 buildOrbit();
 render();

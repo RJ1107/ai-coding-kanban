@@ -19,7 +19,11 @@ function refresh() {
   } catch (e) { console.error('State reload failed:', e.message); }
 }
 function json(res, status, value) { if (res.headersSent) return res.end(); res.writeHead(status, {'Content-Type': 'application/json; charset=utf-8'}); res.end(JSON.stringify(value)); }
-const files = {'/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'], '/field.js': ['field.js', 'text/javascript'], '/style.css': ['style.css', 'text/css']};
+const files = {
+  '/': ['index.html', 'text/html'], '/app.js': ['app.js', 'text/javascript'],
+  '/field.js': ['field.js', 'text/javascript'], '/i18n.js': ['i18n.js', 'text/javascript'],
+  '/style.css': ['style.css', 'text/css'],
+};
 const server = http.createServer(async (req, res) => {
   res.setHeader('Cache-Control', 'no-store');
   res.setHeader('X-Content-Type-Options', 'nosniff');
@@ -34,7 +38,7 @@ const server = http.createServer(async (req, res) => {
     if (req.method === 'GET' && url.pathname === '/api/state') { refresh(); return json(res, 200, {state, token}); }
     if (req.method === 'GET' && url.pathname === '/api/summary') {
       refresh();
-      const text = summarize(state, url.searchParams.get('project') || undefined);
+      const text = summarize(state, url.searchParams.get('project') || undefined, url.searchParams.get('lang') || 'en');
       res.writeHead(200, {'Content-Type': 'text/markdown; charset=utf-8'});
       return res.end(text);
     }

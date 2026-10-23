@@ -342,3 +342,38 @@ textarea { resize: vertical; }
   #orbit .draw { stroke-dashoffset: 0; }
   #orbit .comet { display: none; }
 }
+
+/* Chinese typography. The display and mono stacks are Latin-only by design — Bahnschrift
+   has no Chinese glyphs — so Chinese fell through to whatever the system offered, usually
+   a light weight. Three things fix it: a CJK family appended to each stack (Latin glyphs
+   still come from the font ahead of it), weight synthesis for the families that ship no
+   bold, and letter-spacing dropped on the label styles, where a Latin small-caps track
+   pulls Chinese characters apart. */
+html[lang^="zh"] {
+  --cjk: "PingFang SC", "HarmonyOS Sans SC", "Microsoft YaHei", "Noto Sans SC", "Source Han Sans SC", "Hiragino Sans GB", sans-serif;
+  --display: Bahnschrift, "DIN Alternate", "Roboto Condensed", var(--cjk);
+  --body: "Segoe UI Variable Text", "Segoe UI", Inter, system-ui, var(--cjk);
+  --mono: "Cascadia Code", "SF Mono", ui-monospace, Consolas, var(--cjk);
+  font-synthesis: weight;
+}
+html[lang^="zh"] .kicker,
+html[lang^="zh"] .focus-label,
+html[lang^="zh"] .column h2,
+html[lang^="zh"] .activity h2,
+html[lang^="zh"] .history h3,
+html[lang^="zh"] .card .proof b,
+html[lang^="zh"] .card-foot .tag,
+html[lang^="zh"] .event .route,
+html[lang^="zh"] .status-pick span,
+html[lang^="zh"] label > span,
+html[lang^="zh"] .field > span,
+html[lang^="zh"] #toast,
+html[lang^="zh"] .link { letter-spacing: .02em; font-weight: 600; }
+/* The ring's caption keeps its wide track in Latin; in Chinese it only needs the weight. */
+/* The ring caption is 10px for a Latin "OF 04 DONE"; the Chinese reading needs the size. */
+html[lang^="zh"] #orbit .of { font-size: 12px; letter-spacing: .04em; font-weight: 600; }
+html[lang^="zh"] .stack:empty::after { content: '这一列还没有卡片'; letter-spacing: .02em; }
+/* 22ch holds about eleven Chinese characters, which broke a short title mid-word. */
+html[lang^="zh"] h1 { max-width: 34ch; font-stretch: normal; letter-spacing: 0; font-weight: 700; }
+html[lang^="zh"] .focus strong { letter-spacing: 0; font-weight: 700; }
+html[lang^="zh"] .card h3 { font-weight: 600; }

@@ -40,6 +40,7 @@ For agents that support native skills, install the whole folder through their su
 | Editing protection | A stale manual save cannot overwrite a newer assistant update; the open card warns you |
 | Side panel | Below 860 px the board becomes one column with active work first |
 | Tab status | The browser tab shows `done/total` and turns into a warning when a card is blocked |
+| English or Chinese | A toggle in the bar switches the viewer's own wording and remembers the choice. It starts in Chinese for a Chinese browser. Card text is left exactly as the assistant wrote it |
 | Project isolation | Each workspace gets its own runtime, data and free local port |
 
 ![Board overview](docs/media/board-overview.png)
@@ -92,4 +93,4 @@ Not run: a separate Claude Code process discovering the skill from `.claude/skil
 node --test scripts/check.mjs
 ```
 
-No install or build step is required. The viewer is four static files in `assets/workboard/public/`. Skill code is MIT licensed.
+No install or build step is required. The viewer is five static files in `assets/workboard/public/`. Skill code is MIT licensed.

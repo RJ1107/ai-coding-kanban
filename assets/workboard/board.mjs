@@ -5,8 +5,14 @@ const [type, ...args] = process.argv.slice(2);
 try {
   if (type === 'show') { console.log(JSON.stringify(readState(), null, 2)); }
   else if (type === 'summary') {
-    if (args.length && !(args.length === 2 && args[0] === '--project')) throw new Error('Use: summary [--project ID]');
-    process.stdout.write(summarize(readState(), args[1]));
+    const flags = {};
+    for (let i = 0; i < args.length; i += 2) {
+      if (!['--project', '--lang'].includes(args[i]) || args[i + 1] === undefined) {
+        throw new Error('Use: summary [--project ID] [--lang en|zh]');
+      }
+      flags[args[i].slice(2)] = args[i + 1];
+    }
+    process.stdout.write(summarize(readState(), flags.project, flags.lang || 'en'));
   }
   else if (type === 'apply') {
     const source = args[0] ? fs.readFileSync(args[0], 'utf8') : fs.readFileSync(0, 'utf8');
@@ -16,8 +22,10 @@ try {
   } else if (['project', 'task', 'note'].includes(type)) {
     const command = {type};
     for (let i = 0; i < args.length; i += 2) {
-      if (!/^--[a-z]+$/.test(args[i]) || args[i + 1] === undefined) throw new Error('Use --name value pairs.');
-      command[args[i].slice(2)] = args[i + 1];
+      if (!/^--[a-z]+(-[a-z]+)*$/.test(args[i]) || args[i + 1] === undefined) throw new Error('Use --name value pairs.');
+      // --title-zh reaches the store as titleZh, so the CLI keeps its flag style.
+      const key = args[i].slice(2).replace(/-([a-z])/g, (_, c) => c.toUpperCase());
+      command[key] = args[i + 1];
     }
     console.log(JSON.stringify(await update(command)));
   } else {

@@ -16,12 +16,13 @@
       <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9.5"/><path d="M12 2.5a9.5 9.5 0 0 1 8.2 4.7"/><circle cx="12" cy="12" r="2.6"/></svg>
       <span>Workboard</span>
     </div>
-    <label class="project-switch"><span class="sr">Project</span><select id="project"></select></label>
+    <label class="project-switch"><span class="sr" data-i18n="project">Project</span><select id="project"></select></label>
     <div class="strip" id="strip" aria-hidden="true"></div>
     <div class="bar-actions">
-      <span class="link" id="connection" role="status">Connecting</span>
-      <button class="ghost" id="handoff" title="Copy a Markdown summary for a teammate or the next assistant">Copy handoff</button>
-      <button class="cta" id="new-task">Add task</button>
+      <span class="link" id="connection" role="status" data-i18n="connecting">Connecting</span>
+      <button class="ghost" id="lang" data-i18n="language_label" data-i18n-title="switch_language"></button>
+      <button class="ghost" id="handoff" data-i18n="handoff" data-i18n-title="handoff_title"></button>
+      <button class="cta" id="new-task" data-i18n="add_task"></button>
     </div>
   </header>
 
@@ -32,12 +33,12 @@
         <p class="kicker" id="kicker"></p>
         <h1 id="title"></h1>
         <p class="goal" id="goal"></p>
-        <div class="agents" id="agents" aria-label="Owners"></div>
+        <div class="agents" id="agents" data-i18n-aria="owners"></div>
       </div>
-      <div class="orbit"><svg id="orbit" viewBox="0 0 320 320" role="img" aria-label="Task progress"></svg></div>
+      <div class="orbit"><svg id="orbit" viewBox="0 0 320 320" role="img" data-i18n-aria="progress"></svg></div>
     </section>
 
-    <section class="focus" id="focus" aria-label="Current focus">
+    <section class="focus" id="focus" data-i18n-aria="current_focus">
       <div class="focus-main">
         <p class="focus-label" id="focus-label"></p>
         <strong id="focus-title"></strong>
@@ -50,38 +51,38 @@
     </section>
 
     <div class="deck">
-      <section class="board" id="board" aria-label="Task board"></section>
-      <aside class="activity" aria-label="Activity">
-        <h2>Activity <span id="revision"></span></h2>
+      <section class="board" id="board" data-i18n-aria="task_board"></section>
+      <aside class="activity" data-i18n-aria="activity">
+        <h2><span data-i18n="activity">Activity</span> <span id="revision"></span></h2>
         <ol id="events"></ol>
       </aside>
     </div>
 
-    <footer>Progress is reported by your coding assistant. The link status describes this board service, not the model.</footer>
+    <footer data-i18n="footer"></footer>
   </main>
 
   <div id="toast" role="alert" hidden></div>
 
   <dialog id="detail" class="drawer">
     <form id="detail-form">
-      <div class="dialog-top"><span class="kicker" id="detail-id"></span><button type="button" class="close" data-close="detail" aria-label="Close">×</button></div>
-      <p class="stale-hint" id="detail-stale" hidden>This card changed after you opened it. Close and reopen it to edit the latest version.</p>
-      <label><span>Title</span><input id="detail-title" required maxlength="180" autocomplete="off"></label>
-      <div class="field"><span>Status</span><div class="status-pick" id="detail-status" role="radiogroup" aria-label="Status"></div></div>
-      <label><span>Owner</span><input id="detail-owner" required maxlength="80" autocomplete="off"></label>
-      <label><span>Latest progress / next step</span><textarea id="detail-note" rows="4" maxlength="2000"></textarea></label>
-      <label><span>Results and verification</span><textarea id="detail-evidence" rows="4" maxlength="4000"></textarea></label>
-      <div class="dialog-actions"><button type="button" class="ghost" data-close="detail">Cancel</button><button class="cta">Save changes</button></div>
-      <div class="history"><h3>Card history</h3><ol id="task-history"></ol></div>
+      <div class="dialog-top"><span class="kicker" id="detail-id"></span><button type="button" class="close" data-close="detail" data-i18n-aria="close">×</button></div>
+      <p class="stale-hint" id="detail-stale" data-i18n="stale" hidden></p>
+      <label><span data-i18n="title_field"></span><input id="detail-title" required maxlength="180" autocomplete="off"></label>
+      <div class="field"><span data-i18n="status_field"></span><div class="status-pick" id="detail-status" role="radiogroup" data-i18n-aria="status_field"></div></div>
+      <label><span data-i18n="owner_field"></span><input id="detail-owner" required maxlength="80" autocomplete="off"></label>
+      <label><span data-i18n="note_field"></span><textarea id="detail-note" rows="4" maxlength="2000"></textarea></label>
+      <label><span data-i18n="evidence_field"></span><textarea id="detail-evidence" rows="4" maxlength="4000"></textarea></label>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close="detail" data-i18n="cancel"></button><button class="cta" data-i18n="save"></button></div>
+      <div class="history"><h3 data-i18n="card_history"></h3><ol id="task-history"></ol></div>
     </form>
   </dialog>
 
   <dialog id="create">
     <form id="create-form">
-      <div class="dialog-top"><h2 id="create-heading"></h2><button type="button" class="close" data-close="create" aria-label="Close">×</button></div>
-      <label><span>Title</span><input id="create-title" required maxlength="160" autocomplete="off"></label>
+      <div class="dialog-top"><h2 id="create-heading"></h2><button type="button" class="close" data-close="create" data-i18n-aria="close">×</button></div>
+      <label><span data-i18n="title_field"></span><input id="create-title" required maxlength="160" autocomplete="off"></label>
       <label><span id="create-note-label"></span><textarea id="create-note" rows="3" maxlength="2000"></textarea></label>
-      <div class="dialog-actions"><button type="button" class="ghost" data-close="create">Cancel</button><button class="cta">Create</button></div>
+      <div class="dialog-actions"><button type="button" class="ghost" data-close="create" data-i18n="cancel"></button><button class="cta" data-i18n="create"></button></div>
     </form>
   </dialog>
 
