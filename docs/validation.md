@@ -6,6 +6,8 @@ Versions 2.0.0 and 2.1.0 were validated on Windows 11 with Node.js 24 and Chromi
 
 Checked on a live board carrying four projects: the toggle switches the chrome and the card text together and the choice survives a reload; a Chinese browser opens in Chinese without being asked; cards that carry only English still read correctly in Chinese mode; editing a card in Chinese writes the Chinese copy and leaves the English one intact; `summary --lang zh` returns the Chinese handoff while the default stays English. Chinese typography was the real work: the display and mono stacks are Latin-only, `font-synthesis: none` suppressed the synthesised bold those families need, and the Latin small-caps letter-spacing pulled Chinese characters apart, so all three are overridden under `html[lang^="zh"]` and the English rendering is untouched. Not covered: a macOS or Linux font stack, and any language beyond these two.
 
+Board-to-board discovery was checked with two real boards, FinMate on 4318 and the desktop-pet workspace on 4319: each lists the other's projects as `port · title`, selecting one opens that board at that project, and a board left alone simply shows no group. The probe runs server side over loopback, so no browser origin is involved and nothing is written to disk; a stopped board disappears from the list within twenty seconds. Not covered: boards outside the forty ports from the configured base, and any machine but this one.
+
 ## Automated runtime checks
 
 `node --test scripts/check.mjs` passes six groups:

@@ -42,6 +42,7 @@ For agents that support native skills, install the whole folder through their su
 | Tab status | The browser tab shows `done/total` and turns into a warning when a card is blocked |
 | English or Chinese | A toggle in the bar switches the viewer's own wording and remembers the choice. It starts in Chinese for a Chinese browser. Card text is left exactly as the assistant wrote it |
 | Project isolation | Each workspace gets its own runtime, data and free local port |
+| Jump between boards | The project list also shows the boards running for your other workspaces, as `port · project`. Selecting one opens it. Discovery is a loopback probe of the ports this skill hands out; nothing is shared or stored |
 
 ![Board overview](docs/media/board-overview.png)
 

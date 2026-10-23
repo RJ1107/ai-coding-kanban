@@ -8,6 +8,8 @@ const port = Number(process.env.BOARD_PORT || 4318);
 const token = randomBytes(24).toString('hex');
 const workspaceId = createHash('sha256').update(process.platform === 'win32' ? dataFile.toLowerCase() : dataFile).digest('hex').slice(0,20);
 const clients = new Set();
+// The workspace folder, two levels above .agent-workboard/data/board.json.
+const label = path.basename(path.dirname(path.dirname(path.dirname(dataFile)))) || 'workboard';
 let state = readState();
 function refresh() {
   try {
@@ -32,9 +34,43 @@ const server = http.createServer(async (req, res) => {
   if (!allowedHost) return json(res, 403, {error: 'Use the local board address.'});
   const origin = req.headers.origin;
   if (origin && ![`http://127.0.0.1:${port}`, `http://localhost:${port}`].includes(origin)) return json(res, 403, {error: 'Cross-origin access denied.'});
+  // Board-to-board discovery runs server side, so these two reads carry no browser origin.
   const url = new URL(req.url, `http://127.0.0.1:${port}`);
   try {
-    if (req.method === 'GET' && url.pathname === '/api/health') return json(res, 200, {app:'live-coding-kanban',version,workspaceId,pid:process.pid,port});
+    if (req.method === 'GET' && url.pathname === '/api/health') {
+      return json(res, 200, {app: 'live-coding-kanban', version, workspaceId, pid: process.pid, port, label});
+    }
+    // Each workspace runs its own board on its own port and none of them share state, so a
+    // board finds the others by asking the ports this skill hands out. Nothing is written,
+    // nothing is remembered, and a board that has stopped simply stops answering.
+    if (req.method === 'GET' && url.pathname === '/api/peers') {
+      refresh();
+      const base = Number(url.searchParams.get('base') || 4318);
+      const ports = Array.from({length: 40}, (_, i) => base + i).filter(p => p !== port);
+      const peers = await Promise.all(ports.map(async candidate => {
+        try {
+          const health = await fetch(`http://127.0.0.1:${candidate}/api/health`,
+                                     {signal: AbortSignal.timeout(400)});
+          if (!health.ok) return null;
+          const info = await health.json();
+          if (info.app !== 'live-coding-kanban') return null;
+          const board = await fetch(`http://127.0.0.1:${candidate}/api/projects`,
+                                    {signal: AbortSignal.timeout(400)});
+          return {port: candidate, label: info.label || '', version: info.version,
+                  projects: board.ok ? await board.json() : []};
+        } catch { return null; }
+      }));
+      return json(res, 200, {self: {port, label}, peers: peers.filter(Boolean)});
+    }
+    // A short, public list so another board can name this one's work without its whole state.
+    if (req.method === 'GET' && url.pathname === '/api/projects') {
+      refresh();
+      return json(res, 200, state.projects.map(project => ({
+        id: project.id, title: project.title, titleZh: project.titleZh || '',
+        done: state.tasks.filter(t => t.projectId === project.id && t.status === 'done').length,
+        total: state.tasks.filter(t => t.projectId === project.id).length,
+      })));
+    }
     if (req.method === 'GET' && url.pathname === '/api/state') { refresh(); return json(res, 200, {state, token}); }
     if (req.method === 'GET' && url.pathname === '/api/summary') {
       refresh();

@@ -16,6 +16,7 @@ const cards = new Map();      // task id -> element, for the selected project
 const seenStatus = new Map(); // task id -> status at the previous render
 const seenEvents = new Set();
 let cometAngle = 0, shownDone = null, shownFocus = null;
+let peers = [];  // other boards on this machine, discovered server side
 
 /* The assistant may write a card twice, once per language. Picking here, with a fallback
    to the original, means a board that only ever carried one language still reads fine. */
@@ -185,7 +186,14 @@ function render() {
   const by = status => tasks.filter(task => task.status === status);
   const done = by('done').length, blocked = by('blocked'), doing = by('doing').sort((a, b) => b.updatedAt.localeCompare(a.updatedAt));
 
-  $('project').innerHTML = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(say(p, 'title'))}</option>`).join('') + `<option value="">${esc(t('new_project_option'))}</option>`;
+  const here = state.projects.map(p => `<option value="${esc(p.id)}"${p.id === selectedProject ? ' selected' : ''}>${esc(say(p, 'title'))}</option>`).join('');
+  // Every workspace runs its own board on its own port; listing them here is the only way
+  // to move between them without remembering which port belongs to which project.
+  const elsewhere = peers.flatMap(peer => peer.projects.map(project =>
+    `<option value="go:${peer.port}:${esc(project.id)}">${peer.port} · ${esc(say(project, 'title'))}</option>`));
+  $('project').innerHTML = here
+    + (elsewhere.length ? `<optgroup label="${esc(t('other_boards'))}">${elsewhere.join('')}</optgroup>` : '')
+    + `<option value="">${esc(t('new_project_option'))}</option>`;
   $('strip').innerHTML = tasks.map(task => `<i class="${task.status}"></i>`).join('');
   $('kicker').textContent = project ? `${t('project')} · ${project.id}` : t('workboard');
   $('title').textContent = say(project, 'title') || t('no_project');
@@ -280,6 +288,11 @@ document.addEventListener('keydown', e => {
   if ((e.key === 'Enter' || e.key === ' ') && e.target.matches?.('.card')) { e.preventDefault(); openTask(e.target.dataset.task); }
 });
 $('project').onchange = e => {
+  const jump = /^go:(\d+):(.*)$/.exec(e.target.value);
+  if (jump) {
+    location.href = `http://127.0.0.1:${jump[1]}/?project=${encodeURIComponent(jump[2])}`;
+    return;
+  }
   if (!e.target.value) { e.target.value = selectedProject || ''; return openCreate('project'); }
   selectedProject = e.target.value; localStorage.setItem('workboard-project', selectedProject); render();
 };
@@ -371,8 +384,26 @@ document.addEventListener('visibilitychange', () => { if (!document.hidden) load
 addEventListener('online', () => load().catch(() => {}));
 
 $('board').addEventListener('scroll', e => e.target.classList?.contains('stack') && hint(e.target), true);
+async function findPeers() {
+  try {
+    const res = await fetch('/api/peers');
+    if (!res.ok) return;
+    const found = (await res.json()).peers ?? [];
+    // Only re-render when the neighbourhood actually changed, so the select never
+    // closes under the pointer while someone is choosing from it.
+    if (JSON.stringify(found) === JSON.stringify(peers)) return;
+    peers = found;
+    render();
+  } catch { /* a board on its own is the normal case */ }
+}
+
 applyStatic();
 $('board').innerHTML = statuses.map(s => `<section class="column ${s}" data-status="${s}" aria-label="${names[s]}"><header><i></i><h2>${names[s]}</h2><span class="count" id="count-${s}">00</span></header><div class="stack" id="stack-${s}"></div></section>`).join('');
 buildOrbit();
 render();
 start();
+// Boards come and go with the sessions that own them; look again on a slow timer and
+// whenever the tab is brought back, which is when the list is about to be read.
+findPeers();
+setInterval(findPeers, 20000);
+document.addEventListener('visibilitychange', () => { if (!document.hidden) findPeers(); });
