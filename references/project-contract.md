@@ -10,14 +10,14 @@ Tool: `.agent-workboard/board.mjs` relative to this workspace. Start or resume t
 - Mark `done` only when the work is complete; put actual results and relevant checks in `evidence`. A command being invoked is not proof that it passed.
 - Use `blocked` for a real dependency, recording what would unblock it. On recovery update the status and reason. Do not fabricate motion or move cards on a timer.
 - Preserve completed work and history. Record plan changes with `note`; new scope gets new cards. Handoffs update `owner` on unfinished cards.
-- Keep card text in English. Report observable actions, results and next steps, not private reasoning. Exclude secrets and sensitive user data.
+- Write card text in English and Chinese: `--title-zh`, `--note-zh`, `--evidence-zh` beside the English (`titleZh`, `noteZh`, `evidenceZh` in an apply file), names and identifiers untranslated. If the command prints "Chinese copy missing", send the update again with the Chinese. Only a project set to `--languages en` is English only. Report observable actions, results and next steps, not private reasoning. Exclude secrets and sensitive user data.
 - If reporting fails, retry once, disclose the limitation, and continue authorized work.
 
 Examples, run from this workspace:
 
 ```text
-node .agent-workboard/board.mjs task --project PROJECT-ID --id inspect --title "Inspect the existing behavior" --status doing --note "Checking startup and the affected feature" --actor "Your assistant name" --owner "Your assistant name"
-node .agent-workboard/board.mjs task --project PROJECT-ID --id inspect --status done --evidence "Started the app and checked the affected route" --actor "Your assistant name"
+node .agent-workboard/board.mjs task --project PROJECT-ID --id inspect --title "Inspect the existing behavior" --title-zh "检查现有行为" --status doing --note "Checking startup and the affected feature" --note-zh "正在检查启动和受影响的功能" --actor "Your assistant name" --owner "Your assistant name"
+node .agent-workboard/board.mjs task --project PROJECT-ID --id inspect --status done --evidence "Started the app and checked the affected route" --evidence-zh "已启动应用并检查了受影响的页面" --actor "Your assistant name"
 node .agent-workboard/board.mjs task --project PROJECT-ID --id build --title "Implement the agreed change" --status doing --actor "Next assistant" --owner "Next assistant"
 ```
 

@@ -40,7 +40,7 @@ For agents that support native skills, install the whole folder through their su
 | Editing protection | A stale manual save cannot overwrite a newer assistant update; the open card warns you |
 | Side panel | Below 860 px the board becomes one column with active work first |
 | Tab status | The browser tab shows `done/total` and turns into a warning when a card is blocked |
-| English or Chinese | A toggle in the bar switches the viewer's own wording and remembers the choice. It starts in Chinese for a Chinese browser. Card text is left exactly as the assistant wrote it |
+| English and Chinese | A toggle in the bar switches the viewer's own wording and the card text together, and remembers the choice; it starts in Chinese for a Chinese browser. Boards are bilingual by default: the assistant writes every card in both languages, and the tool flags a card that is missing its Chinese copy (`--languages en` for an English-only board) |
 | Archive finished work | `board.mjs archive --project X` takes a project out of the lists and keeps its cards, history and handoff. `unarchive` puts it back. Nothing is deleted |
 | Idle boards stop themselves | With no viewer attached and no writes for four hours, the server exits and frees its ~110 MB. `manage.mjs start` brings it back from the file on disk. `BOARD_IDLE_MINUTES=0` keeps it running |
 | Project isolation | Each workspace gets its own runtime, data and free local port |

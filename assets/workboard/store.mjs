@@ -5,7 +5,7 @@ import {randomUUID} from 'node:crypto';
 
 export const root = path.dirname(fileURLToPath(import.meta.url));
 export const dataFile = path.resolve(process.env.BOARD_DATA || path.join(root, 'data', 'board.json'));
-export const version = '2.3.0';
+export const version = '2.4.0';
 export const statuses = ['todo', 'doing', 'done', 'blocked'];
 const empty = () => ({schema: 1, revision: 0, projects: [], tasks: [], events: [], updatedAt: null});
 export function readState() {
@@ -19,6 +19,18 @@ function str(value, name, max = 2000) {
   return value.trim();
 }
 function optional(value, name, max = 2000) { return value === '' ? '' : str(value, name, max); }
+// The languages a project's own text is written in. New projects are written in English and Chinese, so every title,
+// note and piece of evidence is expected twice; a project made before this setting existed, or set to "en", in English
+// only. Accepts "en", "zh", "en,zh" or an array.
+const LANGUAGES = ['en', 'zh'];
+function languages(value, fallback) {
+  if (value === undefined || value === null || value === '') return fallback;
+  const list = [...new Set((Array.isArray(value) ? value : String(value).split(',')).map(item => String(item).trim()).filter(Boolean))];
+  if (!list.length || list.some(item => !LANGUAGES.includes(item))) throw new Error('languages must be en, zh or en,zh.');
+  return list;
+}
+// Which Chinese copies a bilingual record still lacks: a field that has text in one language but not the other.
+const missingChinese = (record, pairs) => pairs.filter(([en, zh]) => record[en] && !record[zh]).map(([, zh]) => zh);
 export function apply(state, command) {
   if (!command || typeof command !== 'object' || Array.isArray(command)) throw new Error('Expected a command object.');
   const now = new Date().toISOString();
@@ -27,6 +39,7 @@ export function apply(state, command) {
   const project = state.projects.find(p => p.id === projectId);
   let event;
   let result;
+  let missing = [];
   if (command.type === 'project') {
     const title = str(command.title, 'title', 160);
     const goal = optional(command.goal ?? '', 'goal');
@@ -34,8 +47,10 @@ export function apply(state, command) {
     // viewer falls back to the original, so a board that never sets them behaves as before.
     const titleZh = optional(command.titleZh ?? project?.titleZh ?? '', 'titleZh', 160);
     const goalZh = optional(command.goalZh ?? project?.goalZh ?? '', 'goalZh');
-    if (project) Object.assign(project, {title, titleZh, goal, goalZh, updatedAt: now});
-    else state.projects.push({id: projectId, title, titleZh, goal, goalZh, createdAt: now, updatedAt: now});
+    const langs = languages(command.languages, project ? project.languages ?? ['en'] : ['en', 'zh']);
+    if (project) Object.assign(project, {title, titleZh, goal, goalZh, languages: langs, updatedAt: now});
+    else state.projects.push({id: projectId, title, titleZh, goal, goalZh, languages: langs, createdAt: now, updatedAt: now});
+    if (langs.includes('zh')) missing = missingChinese({title, titleZh, goal, goalZh}, [['title', 'titleZh'], ['goal', 'goalZh']]);
     result = projectId;
     event = {kind: 'project', title, titleZh, note: goal, noteZh: goalZh};
   } else {
@@ -62,10 +77,12 @@ export function apply(state, command) {
       event = {kind: existing ? 'update' : 'create', taskId: id, title, titleZh, from, to: status,
                note, noteZh, evidence, evidenceZh};
       result = id;
+      if ((project.languages ?? ['en']).includes('zh')) missing = missingChinese(changes, [['title', 'titleZh'], ['note', 'noteZh'], ['evidence', 'evidenceZh']]);
     } else if (command.type === 'note') {
       event = {kind: 'note', title: 'Project update', titleZh: '项目备注',
                note: str(command.note, 'note'), noteZh: optional(command.noteZh ?? '', 'noteZh')};
       result = projectId;
+      if ((project.languages ?? ['en']).includes('zh')) missing = missingChinese(event, [['note', 'noteZh']]);
     } else if (command.type === 'archive') {
       // A soft delete: finished work leaves the lists but keeps its cards, its history and
       // its handoff. Nothing is removed from disk, and unarchive puts it back untouched.
@@ -83,7 +100,8 @@ export function apply(state, command) {
   state.updatedAt = now;
   state.events.unshift({id: randomUUID(), at: now, actor, projectId, ...event});
   state.events = state.events.slice(0, 500);
-  return {changed: true, result};
+  // missingZh names the Chinese copies a bilingual project still expects; the command line warns about them.
+  return {changed: true, result, ...(missing.length ? {missingZh: missing} : {})};
 }
 const headings = {
   en: {doing: 'In progress', blocked: 'Blocked', todo: 'Up next', done: 'Done',

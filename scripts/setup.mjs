@@ -8,7 +8,7 @@ const args=process.argv.slice(2);const options={};
 for(let i=0;i<args.length;i++){
  const key=args[i];
  if(['--no-start','--no-connect'].includes(key)){options[key.slice(2)]=true;continue;}
- if(!['--workspace','--project','--title','--goal','--owner','--port'].includes(key)||args[i+1]===undefined)throw new Error('Use --workspace DIRECTORY --project ID --title TITLE --goal GOAL [--owner NAME] [--port NUMBER] [--no-start] [--no-connect]');
+ if(!['--workspace','--project','--title','--goal','--title-zh','--goal-zh','--languages','--owner','--port'].includes(key)||args[i+1]===undefined)throw new Error('Use --workspace DIRECTORY --project ID --title TITLE --goal GOAL [--title-zh 中文标题] [--goal-zh 中文目标] [--languages en,zh|en] [--owner NAME] [--port NUMBER] [--no-start] [--no-connect]');
  options[key.slice(2)]=args[++i];
 }
 try{
@@ -23,7 +23,9 @@ try{
  fs.writeFileSync(path.join(runtime,'.workboard-owned'),'live-coding-kanban\n');
  const tool=path.join(runtime,'board.mjs');
  const env={...process.env,BOARD_DATA:path.join(runtime,'data','board.json')};
- execFileSync(process.execPath,[tool,'project','--project',options.project,'--title',options.title,'--goal',options.goal||'','--actor',options.owner||'Agent'],{encoding:'utf8',env});
+ // Boards are written in English and Chinese unless --languages en is given.
+ const languages=options.languages||'en,zh';
+ execFileSync(process.execPath,[tool,'project','--project',options.project,'--title',options.title,'--goal',options.goal||'','--title-zh',options['title-zh']||'','--goal-zh',options['goal-zh']||'','--languages',languages,'--actor',options.owner||'Agent'],{encoding:'utf8',env,stdio:['ignore','pipe','pipe']});
  if(!options['no-connect']){
   const begin='<!-- live-coding-kanban:start -->',end='<!-- live-coding-kanban:end -->';
   const contract=fs.readFileSync(path.join(skillRoot,'references','project-contract.md'),'utf8');
@@ -40,5 +42,5 @@ try{
  }
  let server;
  if(!options['no-start'])server=JSON.parse(execFileSync(process.execPath,[path.join(runtime,'manage.mjs'),'start',options.port||''],{encoding:'utf8',env}));
- console.log(JSON.stringify({workspace,runtime,project:options.project,boardTool:tool,...(server||{}),reportCommand:[process.execPath,tool,'task','--project',options.project,'--id','TASK-ID','--status','doing','--actor',options.owner||'Agent']},null,2));
+ console.log(JSON.stringify({workspace,runtime,project:options.project,languages:languages.split(','),boardTool:tool,...(server||{}),reportCommand:[process.execPath,tool,'task','--project',options.project,'--id','TASK-ID','--status','doing','--actor',options.owner||'Agent']},null,2));
 }catch(error){console.error(error.message);process.exitCode=1;}

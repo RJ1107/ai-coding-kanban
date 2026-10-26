@@ -2,6 +2,10 @@
 
 Versions 2.0.0 and 2.1.0 were validated on Windows 11 with Node.js 24 and Chromium 153 on 13 October 2026. Version 2.2.0 was validated the same way on 23 October 2026. The runtime targets Node.js 22+ and uses platform-neutral Node APIs; macOS and Linux have not been executed.
 
+## 2.4.0: bilingual by default
+
+New projects are written in English and Chinese (`languages: ["en","zh"]`); `--languages en` makes one English only, and projects from before 2.4.0 stay English only until switched. A bilingual update without its Chinese copy is saved but reported: the result carries `missingZh` and the command prints which `--…-zh` flag to add. Checked by `scripts/check.mjs` (7/7): the default, the English-only setting, a legacy project switched over, a bad value refused, and the command-line warning on standard error with the card still saved.
+
 ## 2.2.0: two languages
 
 Checked on a live board carrying four projects: the toggle switches the chrome and the card text together and the choice survives a reload; a Chinese browser opens in Chinese without being asked; cards that carry only English still read correctly in Chinese mode; editing a card in Chinese writes the Chinese copy and leaves the English one intact; `summary --lang zh` returns the Chinese handoff while the default stays English. Chinese typography was the real work: the display and mono stacks are Latin-only, `font-synthesis: none` suppressed the synthesised bold those families need, and the Latin small-caps letter-spacing pulled Chinese characters apart, so all three are overridden under `html[lang^="zh"]` and the English rendering is untouched. Not covered: a macOS or Linux font stack, and any language beyond these two.

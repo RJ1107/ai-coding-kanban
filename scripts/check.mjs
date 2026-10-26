@@ -160,3 +160,31 @@ test('setup avoids occupied ports, resumes owned server, and stops only that ser
     await new Promise(r=>occupied.close(r));fs.rmSync(temp,{recursive:true,force:true});
   }
 });
+
+test('new projects are written in English and Chinese, and a missing Chinese copy is reported, not refused', async () => {
+  const state = blank();
+  assert.deepEqual(apply(state, {type:'project',project:'a',title:'Project A',goal:'Ship it'}).missingZh, ['titleZh','goalZh']);
+  assert.deepEqual(state.projects[0].languages, ['en','zh']);
+  assert.deepEqual(apply(state, {type:'task',project:'a',id:'t',title:'Build',note:'Starting'}).missingZh, ['titleZh','noteZh']);
+  assert.equal(state.tasks.length, 1); // kept all the same
+  assert.equal(apply(state, {type:'task',project:'a',id:'t',titleZh:'构建',noteZh:'开始'}).missingZh, undefined);
+  assert.deepEqual(apply(state, {type:'task',project:'a',id:'t',status:'done',evidence:'Checked'}).missingZh, ['evidenceZh']);
+  assert.deepEqual(apply(state, {type:'note',project:'a',note:'Plan changed'}).missingZh, ['noteZh']);
+  // English only when asked, and for a project made before the setting existed.
+  apply(state, {type:'project',project:'b',title:'English only',languages:'en'});
+  assert.equal(apply(state, {type:'task',project:'b',id:'t',title:'Build'}).missingZh, undefined);
+  const legacy = blank(); legacy.projects.push({id:'old',title:'Old'});
+  assert.equal(apply(legacy, {type:'task',project:'old',id:'t',title:'Build'}).missingZh, undefined);
+  apply(legacy, {type:'project',project:'old',title:'Old',languages:'en,zh'}); // switched on later
+  assert.deepEqual(apply(legacy, {type:'task',project:'old',id:'t',note:'Now bilingual'}).missingZh, ['titleZh','noteZh']);
+  assert.throws(() => apply(state, {type:'project',project:'c',title:'X',languages:'fr'}), /languages/);
+  // The command line keeps the update and says what to add.
+  const temp = fs.mkdtempSync(path.join(os.tmpdir(), 'workboard-zh-')), options = {env:{...process.env, BOARD_DATA:path.join(temp,'board.json')}};
+  try {
+    await run(process.execPath,[path.join(root,'board.mjs'),'project','--project','z','--title','Z','--title-zh','Z 项目'],options);
+    const half = await run(process.execPath,[path.join(root,'board.mjs'),'task','--project','z','--id','one','--title','Build'],options);
+    assert.match(half.stderr, /Chinese copy missing: --title-zh/); assert.match(half.stdout, /"changed":true/);
+    const whole = await run(process.execPath,[path.join(root,'board.mjs'),'task','--project','z','--id','two','--title','Test','--title-zh','测试'],options);
+    assert.equal(whole.stderr, '');
+  } finally { fs.rmSync(temp, {recursive:true, force:true}); }
+});

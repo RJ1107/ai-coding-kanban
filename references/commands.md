@@ -12,7 +12,9 @@ node .agent-workboard/board.mjs summary --project feature-a
 node .agent-workboard/board.mjs show
 ```
 
-`--title-zh`, `--note-zh` and `--evidence-zh` (and `--title-zh`, `--goal-zh` on a project) carry a second language for the same card; in an `apply` file they are `titleZh`, `noteZh`, `evidenceZh` and `goalZh`. The viewer shows whichever language is selected and falls back to the other, so a card written in one language reads correctly in both. `summary --lang zh` returns the Chinese handoff; the default stays English.
+`--title-zh`, `--note-zh` and `--evidence-zh` (and `--title-zh`, `--goal-zh` on a project, `--note-zh` on a note) carry the Chinese copy of the same card; in an `apply` file they are `titleZh`, `noteZh`, `evidenceZh` and `goalZh`. The viewer shows whichever language is selected and falls back to the other. `summary --lang zh` returns the Chinese handoff; the default stays English.
+
+Projects are written in both languages by default (`languages: ["en","zh"]`). `project --languages en` makes one English only and `--languages en,zh` switches one back; projects made before 2.4.0 count as English only until switched. In a bilingual project, an update whose English text has no Chinese copy is still saved, but the result carries `"missingZh": ["noteZh"]` and the command prints `Chinese copy missing: --note-zh (noteZh)` on standard error.
 
 `task` creates a new card or updates only supplied fields on an existing card. IDs are scoped to a project. Statuses are `todo`, `doing`, `done`, `blocked`. `actor` identifies who reported the change; `owner` identifies who is responsible for the card. Manual UI actions record actor `You`.
 
